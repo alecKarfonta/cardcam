@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Main development environment
+  card-segmentation-dev:
+    build: .
+    container_name: card-seg-dev
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    ports:
+      - "8888:8888"  # Jupyter
+      - "5000:5000"  # Flask/FastAPI
+      - "6006:6006"  # TensorBoard
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    stdin_open: true
+    tty: true
+    command: bash
+
+  # PostgreSQL for metadata and annotations
+  postgres:
+    image: postgres:15
+    container_name: card-seg-db
+    environment:
+      POSTGRES_DB: card_segmentation
+      POSTGRES_USER: carduser
+      POSTGRES_PASSWORD: cardpass123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  # Redis for caching and task queues
+  redis:
+    image: redis:7-alpine
+    container_name: card-seg-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # CVAT for annotation (optional, can be started separately)
+  cvat:
+    image: openvino/cvat_server:latest
+    container_name: card-seg-cvat
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      CVAT_REDIS_HOST: redis
+      CVAT_POSTGRES_HOST: postgres
+      CVAT_POSTGRES_USER: carduser
+      CVAT_POSTGRES_PASSWORD: cardpass123
+      CVAT_POSTGRES_DB: card_segmentation
+    ports:
+      - "8080:8080"
+    volumes:
+      - cvat_data:/home/django/data
+      - cvat_keys:/home/django/keys
+      - cvat_logs:/home/django/logs
+      - cvat_models:/home/django/models
+    profiles:
+      - annotation
+
+volumes:
+  postgres_data:
+  redis_data:
+  cvat_data:
+  cvat_keys:
+  cvat_logs:
+  cvat_models:

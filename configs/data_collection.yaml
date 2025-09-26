@@ -1,0 +1,106 @@
+# Data Collection Configuration
+# Configuration for API data collection and processing
+
+# API Settings
+apis:
+  scryfall:
+    base_url: "https://api.scryfall.com"
+    rate_limit: 10  # requests per second (50-100ms between requests)
+    bulk_data_types:
+      - "default_cards"
+      - "oracle_cards" 
+      - "unique_artwork"
+    retry_attempts: 3
+    timeout: 30
+    
+  pokemon_tcg:
+    base_url: "https://api.pokemontcg.io/v2"
+    rate_limit: 20  # requests per second (1000 per hour with API key)
+    page_size: 250
+    retry_attempts: 3
+    timeout: 30
+    # api_key: ${POKEMON_TCG_API_KEY}  # Set via environment variable
+    
+  ygoprodeck:
+    base_url: "https://db.ygoprodeck.com/api/v7"
+    rate_limit: 20  # requests per second
+    retry_attempts: 3
+    timeout: 30
+
+# Collection Targets
+collection_targets:
+  phase_1_minimum: 50000  # Minimum cards for Phase 1
+  phase_1_recommended: 100000  # Recommended for better training
+  
+  distribution:
+    mtg: 0.4  # 40% Magic cards
+    pokemon: 0.35  # 35% Pokemon cards
+    yugioh: 0.15  # 15% Yu-Gi-Oh cards
+    sports: 0.1   # 10% Sports cards (future)
+
+# Image Processing
+image_processing:
+  download_images: true
+  image_formats: ["jpg", "png", "webp"]
+  min_resolution: [200, 280]  # Minimum width x height
+  max_resolution: [2000, 2800]  # Maximum to avoid huge files
+  quality_threshold: 0.7  # Minimum quality score (0.0-1.0)
+  
+  storage:
+    local_path: "data/raw/card_images"
+    organize_by_game: true
+    organize_by_set: true
+    filename_pattern: "{game}_{set_code}_{card_number}_{card_id}.{ext}"
+
+# Data Validation
+validation:
+  required_fields:
+    mtg: ["name", "set", "collector_number", "image_uris"]
+    pokemon: ["name", "set", "number", "images"]
+    yugioh: ["name", "card_images"]
+  
+  quality_checks:
+    - duplicate_detection
+    - image_accessibility
+    - metadata_completeness
+    - format_validation
+
+# Database Storage
+database:
+  batch_size: 1000  # Records to insert at once
+  commit_frequency: 5000  # Commit every N records
+  duplicate_handling: "skip"  # skip, update, or error
+  
+  indexing:
+    create_indexes: true
+    index_fields: ["name", "set_id", "game_id", "card_number"]
+
+# Logging and Monitoring
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/data_collection.log"
+  max_size_mb: 100
+  backup_count: 5
+  
+monitoring:
+  track_api_usage: true
+  track_rate_limits: true
+  track_errors: true
+  report_frequency: 1000  # Log progress every N requests
+
+# Error Handling
+error_handling:
+  max_retries: 3
+  retry_delay: 1.0  # seconds
+  exponential_backoff: true
+  continue_on_error: true
+  error_threshold: 0.1  # Stop if error rate > 10%
+
+# Scheduling (for automated collection)
+scheduling:
+  enabled: false
+  daily_collection: true
+  collection_time: "02:00"  # 2 AM UTC
+  incremental_updates: true
+  full_refresh_days: 7  # Full refresh every week

@@ -1,0 +1,75 @@
+# Core ML and Computer Vision
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+opencv-python-headless>=4.8.0
+scikit-image>=0.21.0
+Pillow>=10.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Deep Learning Frameworks
+# detectron2 - installed from source in Dockerfile
+ultralytics>=8.0.0
+transformers>=4.30.0
+timm>=0.9.0
+
+# Data Processing and Augmentation
+albumentations>=1.3.0
+imgaug>=0.4.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# API and Web Framework
+fastapi>=0.100.0
+uvicorn>=0.23.0
+requests>=2.31.0
+aiohttp>=3.8.0
+pydantic>=2.0.0
+
+# Database and Storage
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+alembic>=1.11.0
+redis>=4.6.0
+
+# Data Versioning and Experiment Tracking
+dvc>=3.0.0
+mlflow>=2.5.0
+wandb>=0.15.0
+tensorboard>=2.13.0
+
+# Image Processing and Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+tqdm>=4.65.0
+
+# Development and Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.0
+pre-commit>=3.3.0
+
+# Jupyter and Interactive Development
+jupyter>=1.0.0
+jupyterlab>=4.0.0
+ipywidgets>=8.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+click>=8.1.0
+rich>=13.4.0
+typer>=0.9.0
+pyyaml>=6.0.0
+toml>=0.10.0
+
+# Specific ML Libraries for Card Detection
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git
+roboflow>=1.1.0
+
+# API Clients for Data Collection
+pokemontcgsdk>=3.6.0
+mtgsdk>=1.3.1
