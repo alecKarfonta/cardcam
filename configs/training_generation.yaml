@@ -1,0 +1,89 @@
+# Training Data Generation Configuration
+
+# Scene Generation Settings
+scene_generation:
+  output_size: [1024, 768]  # Width x Height
+  min_cards: 1
+  max_cards: 6
+  min_card_size: 120  # Minimum card dimension in pixels
+  max_card_size: 280  # Maximum card dimension in pixels
+  
+  # Layout Settings
+  overlap_probability: 0.3  # Probability of allowing card overlap
+  max_overlap: 0.4  # Maximum overlap ratio (0.0 = no overlap, 1.0 = complete overlap)
+  rotation_range: [-15, 15]  # Rotation range in degrees
+  perspective_probability: 0.4  # Probability of applying perspective transformation
+  lighting_probability: 0.6  # Probability of applying lighting effects
+
+# Augmentation Settings
+augmentations:
+  brightness_contrast:
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+    probability: 0.7
+  
+  color_jitter:
+    hue_shift_limit: 10
+    sat_shift_limit: 20
+    val_shift_limit: 20
+    probability: 0.5
+  
+  noise:
+    var_limit: 20
+    probability: 0.3
+  
+  blur:
+    blur_limit: 3
+    probability: 0.2
+
+# Background Generation
+backgrounds:
+  types:
+    - solid: 0.2      # Solid color backgrounds
+    - gradient: 0.2   # Gradient backgrounds  
+    - texture: 0.2    # Textured backgrounds
+    - wood: 0.2       # Wood-like patterns
+    - fabric: 0.2     # Fabric-like patterns
+  
+  # Background image directory (optional)
+  # background_images_dir: "data/backgrounds"
+  
+  # Color ranges for synthetic backgrounds
+  color_ranges:
+    light_colors: [180, 255]  # For table/surface backgrounds
+    wood_colors: [85, 139, 115]  # Brown tones
+    fabric_colors: [[220, 220, 220], [200, 200, 220], [220, 200, 200]]
+
+# Dataset Generation
+dataset:
+  train_images: 2000
+  val_images: 400
+  test_images: 200
+  
+  # Output format
+  annotation_format: "coco"  # COCO format for segmentation
+  image_format: "jpg"
+  image_quality: 95
+  
+  # Data splits
+  splits:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+
+# Quality Control
+quality_control:
+  min_card_area: 5000  # Minimum card area in pixels
+  max_scene_density: 0.8  # Maximum fraction of scene covered by cards
+  min_cards_visible: 0.7  # Minimum fraction of card that must be visible
+  
+  # Validation checks
+  validate_annotations: true
+  check_mask_quality: true
+  verify_bounding_boxes: true
+
+# Performance Settings
+performance:
+  num_workers: 4  # Number of parallel workers
+  batch_size: 10  # Images to generate in parallel
+  memory_limit: "8GB"  # Memory limit for generation process
