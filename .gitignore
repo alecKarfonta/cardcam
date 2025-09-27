@@ -246,3 +246,18 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# YOLO Training Outputs
+trading_cards_obb/
+outputs/
+cvat_repo/
+*.env
+
+# Large datasets (keep structure, ignore data)
+data/training_100k/images/
+data/yolo_obb/images/
+data/yolo_obb/labels/
+
+# Temporary files
+=8.2.0
+monitor_100k_generation.py
