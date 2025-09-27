@@ -1,0 +1,121 @@
+{
+  "project_template": {
+    "name": "Trading Card Segmentation",
+    "description": "Instance segmentation annotation project for trading cards (Magic, Pokemon, Yu-Gi-Oh, Sports cards, etc.)",
+    "task_type": "instance_segmentation",
+    "labels": [
+      {
+        "name": "card",
+        "color": "#ff6b6b",
+        "type": "polygon",
+        "attributes": [
+          {
+            "name": "condition",
+            "type": "select",
+            "values": ["mint", "near_mint", "excellent", "good", "fair", "poor"],
+            "default": "near_mint"
+          },
+          {
+            "name": "game_type",
+            "type": "select", 
+            "values": ["magic", "pokemon", "yugioh", "sports", "other"],
+            "default": "other"
+          },
+          {
+            "name": "visibility",
+            "type": "select",
+            "values": ["complete", "partial", "occluded"],
+            "default": "complete"
+          },
+          {
+            "name": "orientation",
+            "type": "select",
+            "values": ["upright", "rotated", "tilted"],
+            "default": "upright"
+          }
+        ]
+      }
+    ],
+    "annotation_guidelines": {
+      "boundary_precision": "Follow card edges precisely with ±2 pixel tolerance",
+      "instance_separation": "Each individual card must have separate instance annotation",
+      "visibility_threshold": "Annotate cards with >70% visibility",
+      "edge_cases": "Document unusual cases for team review"
+    },
+    "quality_standards": {
+      "target_iou": 0.95,
+      "annotation_speed": "2-3 minutes per single card image",
+      "review_percentage": 0.10
+    }
+  },
+  "cvat_configuration": {
+    "task_settings": {
+      "overlap": 0,
+      "segment_size": 100,
+      "image_quality": 95,
+      "use_zip_chunks": true,
+      "use_cache": true,
+      "copy_data": false
+    },
+    "annotation_settings": {
+      "default_label": "card",
+      "auto_save_interval": 300,
+      "show_all_interpolation_tracks": false,
+      "automatic_bordering": true,
+      "intelligent_polygon_crop": true
+    },
+    "export_settings": {
+      "format": "COCO 1.0",
+      "include_images": true,
+      "save_images": false,
+      "name_pattern": "card_annotations_{timestamp}"
+    }
+  },
+  "workflow": {
+    "stages": [
+      {
+        "name": "initial_annotation",
+        "description": "Primary annotation by trained annotator",
+        "assignee_role": "annotator",
+        "quality_target": 0.90
+      },
+      {
+        "name": "quality_review", 
+        "description": "Review and refinement by senior annotator",
+        "assignee_role": "reviewer",
+        "quality_target": 0.95
+      },
+      {
+        "name": "final_validation",
+        "description": "Final validation and export preparation",
+        "assignee_role": "validator", 
+        "quality_target": 0.98
+      }
+    ],
+    "batch_sizes": {
+      "single_cards": 50,
+      "multi_cards": 25,
+      "complex_scenes": 10
+    }
+  },
+  "metrics_tracking": {
+    "annotation_metrics": [
+      "annotations_per_hour",
+      "average_iou_score", 
+      "boundary_precision",
+      "instance_accuracy"
+    ],
+    "quality_metrics": [
+      "inter_annotator_agreement",
+      "review_pass_rate",
+      "revision_frequency",
+      "consistency_score"
+    ],
+    "progress_metrics": [
+      "images_completed",
+      "annotations_created",
+      "export_ready_percentage",
+      "validation_pass_rate"
+    ]
+  }
+}

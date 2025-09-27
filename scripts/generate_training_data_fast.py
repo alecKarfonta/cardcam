@@ -110,7 +110,7 @@ def generate_background(size: Tuple[int, int]) -> np.ndarray:
     return background
 
 
-def transform_card(card_image: np.ndarray, rotation: float, scale: float) -> Tuple[np.ndarray, np.ndarray]:
+def transform_card(card_image: np.ndarray, rotation: float, scale: float) -> Tuple[np.ndarray, np.ndarray, Dict]:
     """Transform a card image with rotation and scaling."""
     # Simple augmentations
     if random.random() < 0.7:
@@ -127,6 +127,9 @@ def transform_card(card_image: np.ndarray, rotation: float, scale: float) -> Tup
     new_width = int(width * scale)
     new_height = int(height * scale)
     card_image = cv2.resize(card_image, (new_width, new_height))
+    
+    # Store original scaled dimensions (before rotation)
+    original_scaled_size = (new_width, new_height)
     
     # Create rotation matrix
     center = (new_width // 2, new_height // 2)
@@ -153,7 +156,52 @@ def transform_card(card_image: np.ndarray, rotation: float, scale: float) -> Tup
                          flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
                          borderValue=0)
     
-    return rotated_card, mask
+    # Store transformation info for proper bbox calculation
+    transform_info = {
+        'rotation': rotation,
+        'scale': scale,
+        'original_scaled_size': original_scaled_size,
+        'rotation_matrix': rotation_matrix,
+        'rotated_size': (new_w, new_h)
+    }
+    
+    return rotated_card, mask, transform_info
+
+
+def calculate_rotated_bbox(center_x: float, center_y: float, width: float, height: float, 
+                          rotation_degrees: float) -> List[List[float]]:
+    """Calculate rotated bounding box corners."""
+    # Convert rotation to radians
+    rotation_rad = np.radians(rotation_degrees)
+    
+    # Half dimensions
+    half_w = width / 2
+    half_h = height / 2
+    
+    # Original corners relative to center
+    corners = np.array([
+        [-half_w, -half_h],  # top-left
+        [half_w, -half_h],   # top-right
+        [half_w, half_h],    # bottom-right
+        [-half_w, half_h]    # bottom-left
+    ])
+    
+    # Rotation matrix
+    cos_r = np.cos(rotation_rad)
+    sin_r = np.sin(rotation_rad)
+    rotation_matrix = np.array([
+        [cos_r, -sin_r],
+        [sin_r, cos_r]
+    ])
+    
+    # Rotate corners
+    rotated_corners = corners @ rotation_matrix.T
+    
+    # Translate to actual position
+    rotated_corners[:, 0] += center_x
+    rotated_corners[:, 1] += center_y
+    
+    return rotated_corners.tolist()
 
 
 def find_card_position(card_shape: Tuple[int, int], occupied_regions: List[Tuple], 
@@ -226,7 +274,7 @@ def generate_single_scene(args):
             rotation = random.uniform(*CONFIG.rotation_range)
             
             # Transform card
-            transformed_card, card_mask = transform_card(card_image, rotation, scale)
+            transformed_card, card_mask, transform_info = transform_card(card_image, rotation, scale)
             
             # Find position for the card
             position = find_card_position(
@@ -257,7 +305,9 @@ def generate_single_scene(args):
             card_instances.append({
                 'bbox': (x, y, card_w, card_h),
                 'mask': card_mask,
-                'card_path': str(card_path)
+                'card_path': str(card_path),
+                'transform_info': transform_info,
+                'position': (x, y)
             })
             
             # Update occupied regions
@@ -273,13 +323,15 @@ def generate_single_scene(args):
         image_path = Path(OUTPUT_DIR) / "images" / image_filename
         cv2.imwrite(str(image_path), scene)
         
-        # Generate annotations
+        # Generate annotations with occlusion handling
         annotations = []
+        
         for i, card_instance in enumerate(card_instances):
             x, y, w, h = card_instance['bbox']
             mask = card_instance['mask']
+            transform_info = card_instance['transform_info']
             
-            # Create segmentation mask
+            # Create segmentation mask for this card
             scene_mask = np.zeros(CONFIG.output_size[::-1], dtype=np.uint8)  # height, width
             card_h, card_w = mask.shape
             
@@ -289,12 +341,52 @@ def generate_single_scene(args):
             actual_w = end_x - x
             
             if actual_h > 0 and actual_w > 0:
-                scene_mask[y:end_y, x:end_x] = mask[:actual_h, :actual_w]
+                # Place this card's mask
+                card_mask_region = mask[:actual_h, :actual_w]
+                scene_mask[y:end_y, x:end_x] = card_mask_region
+                
+                # Remove occluded parts by checking against later cards (higher Z-order)
+                for j in range(i + 1, len(card_instances)):
+                    later_card = card_instances[j]
+                    later_x, later_y, later_w, later_h = later_card['bbox']
+                    later_mask = later_card['mask']
+                    
+                    # Check if there's overlap
+                    overlap_x1 = max(x, later_x)
+                    overlap_y1 = max(y, later_y)
+                    overlap_x2 = min(x + w, later_x + later_w)
+                    overlap_y2 = min(y + h, later_y + later_h)
+                    
+                    if overlap_x1 < overlap_x2 and overlap_y1 < overlap_y2:
+                        # There's overlap - remove occluded parts
+                        # Calculate overlap region in scene coordinates
+                        overlap_w = overlap_x2 - overlap_x1
+                        overlap_h = overlap_y2 - overlap_y1
+                        
+                        # Get the later card's mask in the overlap region
+                        later_mask_x1 = overlap_x1 - later_x
+                        later_mask_y1 = overlap_y1 - later_y
+                        later_mask_x2 = later_mask_x1 + overlap_w
+                        later_mask_y2 = later_mask_y1 + overlap_h
+                        
+                        # Ensure we don't go out of bounds
+                        later_mask_h, later_mask_w = later_mask.shape
+                        later_mask_x2 = min(later_mask_x2, later_mask_w)
+                        later_mask_y2 = min(later_mask_y2, later_mask_h)
+                        
+                        if (later_mask_x2 > later_mask_x1 and later_mask_y2 > later_mask_y1):
+                            later_overlap_mask = later_mask[later_mask_y1:later_mask_y2, 
+                                                           later_mask_x1:later_mask_x2]
+                            
+                            # Remove occluded pixels from current card's mask
+                            occlusion_pixels = later_overlap_mask > 128
+                            scene_mask[overlap_y1:overlap_y2, overlap_x1:overlap_x2][occlusion_pixels] = 0
             
-            # Find contours
+            # Find contours for segmentation
             contours, _ = cv2.findContours(scene_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            if contours:
+            # Skip cards that are completely occluded (no visible area)
+            if contours and np.sum(scene_mask > 128) > 100:  # Minimum 100 visible pixels
                 largest_contour = max(contours, key=cv2.contourArea)
                 epsilon = 0.02 * cv2.arcLength(largest_contour, True)
                 simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
@@ -303,15 +395,48 @@ def generate_single_scene(args):
                     segmentation = simplified_contour.flatten().tolist()
                     area = cv2.contourArea(largest_contour)
                     
-                    x_coords = simplified_contour[:, 0, 0]
-                    y_coords = simplified_contour[:, 0, 1]
-                    bbox = [int(min(x_coords)), int(min(y_coords)), 
-                           int(max(x_coords) - min(x_coords)), int(max(y_coords) - min(y_coords))]
+                    # Calculate rotated bounding box
+                    original_w, original_h = transform_info['original_scaled_size']
+                    rotation = transform_info['rotation']
+                    
+                    # Calculate center of the ACTUAL card (not the rotated bounding box)
+                    # The rotated card is centered within the larger rotated bounding box
+                    # We need to find where the original card center is in scene coordinates
+                    rotation_matrix = transform_info['rotation_matrix']
+                    
+                    # The center of the original card in the rotated image
+                    rotated_size = transform_info['rotated_size']
+                    card_center_in_rotated = (rotated_size[0] / 2, rotated_size[1] / 2)
+                    
+                    # Transform this to scene coordinates
+                    center_x = x + card_center_in_rotated[0]
+                    center_y = y + card_center_in_rotated[1]
+                    
+                    # Get rotated bounding box corners
+                    # Note: OpenCV uses clockwise positive, math uses counter-clockwise positive
+                    # So we negate the rotation to match OpenCV's direction
+                    rotated_corners = calculate_rotated_bbox(center_x, center_y, original_w, original_h, -rotation)
+                    
+                    # Flatten corners for segmentation format
+                    rotated_bbox_segmentation = []
+                    for corner in rotated_corners:
+                        rotated_bbox_segmentation.extend([float(corner[0]), float(corner[1])])
+                    
+                    # Calculate axis-aligned bbox for compatibility (min enclosing rectangle)
+                    x_coords = [corner[0] for corner in rotated_corners]
+                    y_coords = [corner[1] for corner in rotated_corners]
+                    axis_aligned_bbox = [
+                        int(min(x_coords)), int(min(y_coords)), 
+                        int(max(x_coords) - min(x_coords)), int(max(y_coords) - min(y_coords))
+                    ]
                     
                     annotations.append({
                         'segmentation': [segmentation],
                         'area': area,
-                        'bbox': bbox
+                        'bbox': axis_aligned_bbox,
+                        'rotated_bbox': rotated_bbox_segmentation,  # Add rotated bbox
+                        'rotation': rotation,  # Store rotation for reference
+                        'original_size': [original_w, original_h]  # Store original card size
                     })
         
         return {
@@ -425,7 +550,7 @@ def generate_dataset_fast(card_images_dir: str, output_dir: str, num_train: int,
             
             # Add annotations
             for ann in result['annotations']:
-                coco_dataset["annotations"].append({
+                annotation_data = {
                     "id": annotation_id,
                     "image_id": image_id,
                     "category_id": 1,
@@ -433,7 +558,15 @@ def generate_dataset_fast(card_images_dir: str, output_dir: str, num_train: int,
                     "area": ann['area'],
                     "bbox": ann['bbox'],
                     "iscrowd": 0
-                })
+                }
+                
+                # Add rotated bounding box information if available
+                if 'rotated_bbox' in ann:
+                    annotation_data["rotated_bbox"] = ann['rotated_bbox']
+                    annotation_data["rotation"] = ann['rotation']
+                    annotation_data["original_size"] = ann['original_size']
+                
+                coco_dataset["annotations"].append(annotation_data)
                 annotation_id += 1
         
         # Save annotations

@@ -1,0 +1,95 @@
+# YOLO OBB Dataset Configuration for Trading Card Detection
+# This configuration file defines the dataset structure for YOLO oriented bounding box training
+
+# Dataset paths (absolute paths)
+path: /home/alec/git/pokemon/data/yolo_obb  # Root dataset directory
+train: images/train     # Training images directory (relative to 'path')
+val: images/val         # Validation images directory (relative to 'path')
+test: images/test       # Test images directory (relative to 'path')
+
+# Class names (single class for card detection)
+names:
+  0: card
+
+# Number of classes
+nc: 1
+
+# Dataset information
+info:
+  description: "Trading Card Oriented Bounding Box Detection Dataset"
+  version: "1.0"
+  year: 2025
+  contributor: "Trading Card Segmentation Project"
+  
+# Training parameters
+train_params:
+  image_size: [1024, 768]  # [width, height] - matches your dataset
+  batch_size: 16           # Adjust based on GPU memory
+  workers: 8               # Number of data loading workers
+  
+# Data augmentation settings (for OBB)
+augmentation:
+  hsv_h: 0.015    # Image HSV-Hue augmentation (fraction)
+  hsv_s: 0.7      # Image HSV-Saturation augmentation (fraction)  
+  hsv_v: 0.4      # Image HSV-Value augmentation (fraction)
+  degrees: 45.0   # Image rotation (+/- deg)
+  translate: 0.1  # Image translation (+/- fraction)
+  scale: 0.5      # Image scale (+/- gain)
+  shear: 0.0      # Image shear (+/- deg)
+  perspective: 0.0 # Image perspective (+/- fraction), range 0-0.001
+  flipud: 0.0     # Image flip up-down (probability)
+  fliplr: 0.5     # Image flip left-right (probability)
+  mosaic: 1.0     # Image mosaic (probability)
+  mixup: 0.0      # Image mixup (probability)
+  copy_paste: 0.0 # Segment copy-paste (probability)
+
+# Model architecture settings
+model:
+  type: "yolo11n-obb"  # YOLOv11 nano OBB model (fastest)
+  # Alternative options:
+  # - yolo11s-obb: Small model (balanced speed/accuracy)
+  # - yolo11m-obb: Medium model (better accuracy)
+  # - yolo11l-obb: Large model (highest accuracy)
+  # - yolo11x-obb: Extra large model (best accuracy, slowest)
+
+# Training hyperparameters
+hyperparameters:
+  lr0: 0.01          # Initial learning rate
+  lrf: 0.01          # Final learning rate (lr0 * lrf)
+  momentum: 0.937    # SGD momentum/Adam beta1
+  weight_decay: 0.0005 # Optimizer weight decay
+  warmup_epochs: 3.0 # Warmup epochs (fractions ok)
+  warmup_momentum: 0.8 # Warmup initial momentum
+  warmup_bias_lr: 0.1  # Warmup initial bias lr
+  box: 7.5           # Box loss gain
+  cls: 0.5           # Class loss gain  
+  dfl: 1.5           # DFL loss gain
+  pose: 12.0         # Pose loss gain (for OBB)
+  kobj: 2.0          # Keypoint obj loss gain (for OBB)
+  label_smoothing: 0.0 # Label smoothing (fraction)
+  nbs: 64            # Nominal batch size
+  overlap_mask: True # Masks should overlap during training
+  mask_ratio: 4      # Mask downsample ratio
+  dropout: 0.0       # Use dropout regularization
+
+# Validation settings
+validation:
+  conf: 0.001        # Object confidence threshold for NMS
+  iou: 0.6           # IoU threshold for NMS
+  max_det: 300       # Maximum detections per image
+  save_json: True    # Save results to JSON file
+  save_hybrid: False # Save hybrid version of labels
+  single_cls: False  # Treat dataset as single-class
+  verbose: True      # Verbose output
+
+# Logging and checkpoints
+logging:
+  project: "trading_cards_obb"  # Project name
+  name: "yolo11n_obb_v1"       # Experiment name
+  save_dir: "../outputs/training" # Save directory
+  exist_ok: True               # Overwrite existing project/name
+  plots: True                  # Save training plots
+  save_period: 10              # Save checkpoint every N epochs
+  
+# Hardware settings
+device: ""  # CUDA device, i.e. 0 or 0,1,2,3 or cpu (auto-detect)
