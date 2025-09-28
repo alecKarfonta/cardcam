@@ -292,8 +292,27 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
 
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
-    if (detectionState === 'searching' || detectionState === 'detected') return;
-    if (!lastResult?.detections || lastResult.detections.length === 0) return;
+    
+    // If no detections, still capture the frame but show a message
+    if (!lastResult?.detections || lastResult.detections.length === 0) {
+      console.log('No cards detected, but capturing frame anyway');
+      // Still capture the raw frame for manual inspection
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (onCapture) {
+          onCapture(imageData);
+        }
+      }
+      return;
+    }
 
     setIsProcessing(true);
     
@@ -311,9 +330,10 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
-      // Filter detections by confidence threshold
+      // Filter detections by confidence threshold (use lower threshold for capture)
+      const captureThreshold = Math.min(confidenceThreshold, 0.3); // Use at most 0.3 for capture
       const validDetections = lastResult.detections.filter(
-        (detection: any) => detection.confidence >= confidenceThreshold && 
+        (detection: any) => detection.confidence >= captureThreshold && 
         CardCropper.isValidCardDetection(detection)
       );
 
@@ -502,7 +522,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
         <button
           className={`capture-button ${detectionState} ${isProcessing ? 'processing' : ''}`}
           onClick={handleCapture}
-          disabled={detectionState === 'searching' || detectionState === 'detected' || isProcessing}
+          disabled={isProcessing}
         >
           {isProcessing ? (
             <div className="loading-spinner" />

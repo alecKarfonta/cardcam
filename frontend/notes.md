@@ -166,7 +166,9 @@ Internet → mlapi.us (192.168.1.196) → nginx proxy → 192.168.1.77:3001 → 
 - **Progress Tracking**: ✅ Real-time progress updates during card extraction process
 - **Flexible Positioning**: ✅ Cards can be detected anywhere in the frame (no centering required)
 - **Relaxed Capture Requirements**: ✅ Lowered quality thresholds for easier capture (0.6 → 0.25)
-- **Capture in Positioned State**: ✅ Button now works in both "positioned" and "ready" states
+- **Always-Enabled Capture**: ✅ Button is always clickable regardless of detection state
+- **Fallback Capture**: ✅ Even with no detections, captures raw frame for manual inspection
+- **Lower Capture Threshold**: ✅ Uses max 0.3 confidence for extraction (ignores higher slider values)
 
 ### Technical Implementation
 - **CardCropper Utility**: Handles both axis-aligned and rotated bounding box extraction
