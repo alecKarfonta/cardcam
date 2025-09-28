@@ -294,22 +294,35 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
 
   // Start frame processing when video is ready
   useEffect(() => {
+    let cleanupFrameProcessing: (() => void) | undefined;
+    
     if (videoRef.current && cameraState.status === 'streaming') {
       const video = videoRef.current;
       
       const handleLoadedMetadata = () => {
-        startFrameProcessing();
+        cleanupFrameProcessing = startFrameProcessing();
       };
 
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
       
       return () => {
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        if (cleanupFrameProcessing) {
+          cleanupFrameProcessing();
+        }
       };
     }
+    
+    return () => {
+      if (cleanupFrameProcessing) {
+        cleanupFrameProcessing();
+      }
+    };
   }, [cameraState.status]);
 
   const startFrameProcessing = () => {
+    let animationId: number;
+    
     const processFrame = () => {
       // Use ref for immediate state checking to avoid React state update delays
       const shouldProcess = cameraState.status === 'streaming' && modelLoadedRef.current && !shouldSkipFrame() && !isCameraFrozen && !isCapturingFramesRef.current;
@@ -317,10 +330,21 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
       if (shouldProcess) {
         captureAndAnalyzeFrame();
       }
-        requestAnimationFrame(processFrame);
+      
+      // Only continue the loop if camera is still streaming and not frozen
+      if (cameraState.status === 'streaming' && !isCameraFrozen) {
+        animationId = requestAnimationFrame(processFrame);
+      }
     };
     
     processFrame();
+    
+    // Return cleanup function to cancel animation frame
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
   };
 
   const captureAndAnalyzeFrame = async () => {
