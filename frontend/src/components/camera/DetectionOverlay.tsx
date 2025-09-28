@@ -37,22 +37,27 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     if (detections.length > 0) {
       console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} detections`);
       console.log(`🖼️ Actual canvas element size: ${canvas.width}x${canvas.height}`);
-      detections.slice(0, 3).forEach((detection, index) => { // Only show first 3 for brevity
+      console.log(`🖼️ Scale factors: scaleX=${(canvas.width / canvasWidth).toFixed(3)}, scaleY=${(canvas.height / canvasHeight).toFixed(3)}`);
+      
+      detections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
         console.log(`  Detection ${index}:`, {
-          boundingBox: `x:${detection.boundingBox.x.toFixed(3)}, y:${detection.boundingBox.y.toFixed(3)}, w:${detection.boundingBox.width.toFixed(3)}, h:${detection.boundingBox.height.toFixed(3)}`,
-          corners: detection.corners ? detection.corners.map((c, i) => `C${i}:(${c.x.toFixed(3)},${c.y.toFixed(3)})`).join(' ') : 'none',
+          boundingBox: `x:${detection.boundingBox.x.toFixed(1)}, y:${detection.boundingBox.y.toFixed(1)}, w:${detection.boundingBox.width.toFixed(1)}, h:${detection.boundingBox.height.toFixed(1)}`,
+          corners: detection.corners ? detection.corners.map((c, i) => `C${i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ') : 'none',
           confidence: detection.confidence.toFixed(3),
           isRotated: detection.isRotated
         });
         
-        // Show what the coordinates will be after scaling
+        // Show what the coordinates will be after scaling to canvas
         if (detection.corners && detection.corners.length >= 4) {
+          const scaleX = canvas.width / canvasWidth;
+          const scaleY = canvas.height / canvasHeight;
           const scaledCorners = detection.corners.map((corner, i) => ({
             i,
-            x: corner.x * canvas.width,
-            y: corner.y * canvas.height
+            x: corner.x * scaleX,
+            y: corner.y * scaleY
           }));
-          console.log(`    Scaled corners: ${scaledCorners.map(c => `C${c.i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ')}`);
+          console.log(`    Final canvas corners: ${scaledCorners.map(c => `C${c.i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ')}`);
+          console.log(`    Canvas bounds: width=${canvas.width}, height=${canvas.height}`);
         }
       });
     }
@@ -141,6 +146,10 @@ function drawDetection(
       y: corner.y * scaleY
     }));
     
+    // DEBUG: Test if camera is horizontally mirrored
+    // If boxes appear on wrong side, uncomment this line:
+    // canvasCorners.forEach(corner => { corner.x = ctx.canvas.width - corner.x; });
+    
     // Draw rotated bounding box using corner points
     drawRotatedBoundingBox(ctx, canvasCorners, fillColor, strokeColor);
     
@@ -157,10 +166,14 @@ function drawDetection(
     const scaleX = ctx.canvas.width / videoWidth;
     const scaleY = ctx.canvas.height / videoHeight;
     
-    const canvasX = boundingBox.x * scaleX;
+    let canvasX = boundingBox.x * scaleX;
     const canvasY = boundingBox.y * scaleY;
     const canvasBoxWidth = boundingBox.width * scaleX;
     const canvasBoxHeight = boundingBox.height * scaleY;
+    
+    // DEBUG: Test if camera is horizontally mirrored
+    // If boxes appear on wrong side, uncomment this line:
+    // canvasX = ctx.canvas.width - canvasX - canvasBoxWidth;
     
     ctx.fillRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
     ctx.strokeRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
