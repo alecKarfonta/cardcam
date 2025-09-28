@@ -1,67 +1,6 @@
-import { BackboneModelManager } from './BackboneModelManager';
+import { ModelManager } from './ModelManager';
 import { CardDetection } from '../store/slices/inferenceSlice';
 import { EnhancedCropResult } from './EnhancedCardCropper';
-
-// Legacy ModelPrediction interface for compatibility
-interface ModelPrediction {
-  boxes: Float32Array;
-  rotatedBoxes?: Float32Array;
-  scores: Float32Array;
-  classes: Int32Array;
-  validDetections: number;
-}
-
-// Adapter interface to support BackboneModelManager
-interface ModelManagerAdapter {
-  predict(imageData: ImageData): Promise<ModelPrediction>;
-}
-
-// Adapter class to convert BackboneModelManager to legacy ModelManager interface
-class BackboneModelAdapter implements ModelManagerAdapter {
-  constructor(private backboneManager: BackboneModelManager) {}
-
-  async predict(imageData: ImageData): Promise<ModelPrediction> {
-    const backbonePrediction = await this.backboneManager.predict(imageData);
-    
-    // Convert BackboneModelPrediction to ModelPrediction format
-    const validDetections = backbonePrediction.detections.length;
-    const boxes = new Float32Array(validDetections * 4);
-    const scores = new Float32Array(validDetections);
-    const classes = new Int32Array(validDetections);
-    const rotatedBoxes = new Float32Array(validDetections * 8);
-
-    backbonePrediction.detections.forEach((detection, i) => {
-      // Convert normalized OBB to axis-aligned bounding box
-      const boxIndex = i * 4;
-      boxes[boxIndex] = detection.boundingBox.x;
-      boxes[boxIndex + 1] = detection.boundingBox.y;
-      boxes[boxIndex + 2] = detection.boundingBox.width;
-      boxes[boxIndex + 3] = detection.boundingBox.height;
-      
-      scores[i] = detection.confidence;
-      classes[i] = 0; // All detections are cards (class 0)
-      
-      // Store rotated corners
-      const rotatedIndex = i * 8;
-      rotatedBoxes[rotatedIndex] = detection.corners.x1;
-      rotatedBoxes[rotatedIndex + 1] = detection.corners.y1;
-      rotatedBoxes[rotatedIndex + 2] = detection.corners.x2;
-      rotatedBoxes[rotatedIndex + 3] = detection.corners.y2;
-      rotatedBoxes[rotatedIndex + 4] = detection.corners.x3;
-      rotatedBoxes[rotatedIndex + 5] = detection.corners.y3;
-      rotatedBoxes[rotatedIndex + 6] = detection.corners.x4;
-      rotatedBoxes[rotatedIndex + 7] = detection.corners.y4;
-    });
-
-    return {
-      boxes,
-      rotatedBoxes: validDetections > 0 ? rotatedBoxes : undefined,
-      scores,
-      classes,
-      validDetections
-    };
-  }
-}
 
 export interface PostProcessValidationResult {
   isValid: boolean;
@@ -95,22 +34,20 @@ export interface PostProcessValidationOptions {
  * Validates extracted card images by running them through the model again
  * to ensure the model still detects a card in the extracted region.
  * Adjusts confidence scores based on validation results.
- * 
- * Updated to work with BackboneModelManager through adapter pattern.
  */
 export class PostProcessValidator {
-  private modelAdapter: ModelManagerAdapter;
+  private modelManager: ModelManager;
   private options: PostProcessValidationOptions;
 
   constructor(
-    backboneModelManager: BackboneModelManager,
+    modelManager: ModelManager,
     options: Partial<PostProcessValidationOptions> = {}
   ) {
-    this.modelAdapter = new BackboneModelAdapter(backboneModelManager);
+    this.modelManager = modelManager;
     this.options = {
-      confidenceThreshold: 0.25, // Lower threshold for validation
+      confidenceThreshold: 0.15, // Very low threshold for validation (individual cards often have lower confidence)
       maxConfidenceBoost: 0.15,  // Max 15% boost for valid detections
-      maxConfidencePenalty: 0.30, // Max 30% penalty for invalid detections
+      maxConfidencePenalty: 0.20, // Reduced penalty (was 0.30) - be less harsh on validation failures
       enableAspectRatioValidation: true,
       enableSizeValidation: true,
       enableFeatureValidation: true,
@@ -119,13 +56,60 @@ export class PostProcessValidator {
   }
 
   /**
-   * Create PostProcessValidator from BackboneModelManager
+   * Pad extracted card image to model input size (1088x1088) with white background
    */
-  static fromBackboneManager(
-    backboneManager: BackboneModelManager,
-    options: Partial<PostProcessValidationOptions> = {}
-  ): PostProcessValidator {
-    return new PostProcessValidator(backboneManager, options);
+  private padImageToModelSize(imageData: ImageData): ImageData {
+    const MODEL_SIZE = 1088; // Model expects 1088x1088 input
+    
+    // If already the right size, return as-is
+    if (imageData.width === MODEL_SIZE && imageData.height === MODEL_SIZE) {
+      return imageData;
+    }
+    
+    // Create canvas for padding operation
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Could not create canvas context for padding');
+    }
+    
+    // Set canvas to model size
+    canvas.width = MODEL_SIZE;
+    canvas.height = MODEL_SIZE;
+    
+    // Fill with white background (typical for card images)
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, MODEL_SIZE, MODEL_SIZE);
+    
+    // Calculate scaling to fit the card while maintaining aspect ratio
+    const scale = Math.min(MODEL_SIZE / imageData.width, MODEL_SIZE / imageData.height);
+    const scaledWidth = imageData.width * scale;
+    const scaledHeight = imageData.height * scale;
+    
+    // Center the scaled image
+    const offsetX = (MODEL_SIZE - scaledWidth) / 2;
+    const offsetY = (MODEL_SIZE - scaledHeight) / 2;
+    
+    // Create temporary canvas for the original image
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) {
+      throw new Error('Could not create temporary canvas context');
+    }
+    
+    tempCanvas.width = imageData.width;
+    tempCanvas.height = imageData.height;
+    tempCtx.putImageData(imageData, 0, 0);
+    
+    // Draw the scaled image centered on the padded canvas
+    ctx.drawImage(tempCanvas, offsetX, offsetY, scaledWidth, scaledHeight);
+    
+    // Get the padded image data
+    const paddedImageData = ctx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE);
+    
+    console.log(`   🔧 Padded ${imageData.width}x${imageData.height} → ${MODEL_SIZE}x${MODEL_SIZE} (scale: ${scale.toFixed(2)})`);
+    
+    return paddedImageData;
   }
 
   /**
@@ -152,9 +136,16 @@ export class PostProcessValidator {
     let validationScore = 0;
 
     try {
-      // Run inference on the extracted card image using backbone model
-      console.log(`   🤖 Running backbone inference on extracted card...`);
-      const prediction = await this.modelAdapter.predict(extractedCard.imageData);
+      // Run inference on the extracted card image
+      console.log(`   🤖 Running inference on extracted card...`);
+      console.log(`   📐 Original card dimensions: ${extractedCard.imageData.width}x${extractedCard.imageData.height}`);
+      console.log(`   🎯 Using confidence threshold: ${(this.options.confidenceThreshold * 100).toFixed(0)}%`);
+      
+      // Pad the extracted card to model input size (1088x1088) for proper inference
+      const paddedImageData = this.padImageToModelSize(extractedCard.imageData);
+      console.log(`   📐 Padded dimensions: ${paddedImageData.width}x${paddedImageData.height}`);
+      
+      const prediction = await this.modelManager.predict(paddedImageData);
       
       validationMetrics.detectionCount = prediction.validDetections;
       console.log(`   📊 Validation inference found ${prediction.validDetections} detections`);
@@ -185,7 +176,8 @@ export class PostProcessValidator {
         }
       } else {
         console.log(`   ❌ No card detected in extracted image`);
-        recommendations.push('No card detected in extracted region - extraction may be inaccurate');
+        console.log(`   🤔 This might be due to scale/preprocessing differences for individual cards`);
+        recommendations.push('No card detected in extracted region - this may be due to model scale sensitivity with individual cards');
       }
 
       // Aspect ratio validation
@@ -243,7 +235,13 @@ export class PostProcessValidator {
         originalDetection.confidence + confidenceAdjustment
       ));
 
-      const isValid = validationScore >= 50; // Require at least 50/100 validation score
+      // More intelligent validation: if no detection but good features, be more lenient
+      const hasGoodFeatures = validationMetrics.aspectRatioMatch && 
+                              validationMetrics.sizeConsistency && 
+                              validationMetrics.cardLikeFeatures;
+      
+      const isValid = validationScore >= 50 || // Standard threshold
+                     (validationScore >= 30 && hasGoodFeatures); // Lower threshold if other metrics are good
 
       console.log(`   📊 Validation complete:`);
       console.log(`      Score: ${validationScore}/100`);

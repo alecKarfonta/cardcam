@@ -61,7 +61,8 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
     isProcessing: isInferenceProcessing,
     lastResult,
     loadModel,
-    runInference
+    runInference,
+    modelManager
   } = useInference();
 
   // Capture current frame with detections for debugging
@@ -535,10 +536,14 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
         console.log(`   Card ${index + 1}: ${result.extractedWidth}x${result.extractedHeight} (method: ${result.metadata.extractionMethod}, high-res: ${result.metadata.isHighResolution})`);
       });
       
-      // Initialize PostProcessValidator with BackboneModelManager
+      // Initialize PostProcessValidator with ModelManager
       let postProcessValidator: PostProcessValidator | null = null;
-      // PostProcessValidator not available with useInference hook
-      console.log('⚠️ PostProcessValidator not available - using useInference hook');
+      if (modelManager && modelManager.isModelLoaded()) {
+        postProcessValidator = new PostProcessValidator(modelManager);
+        console.log('✅ PostProcessValidator initialized with ModelManager');
+      } else {
+        console.log('⚠️ PostProcessValidator not available - ModelManager not loaded');
+      }
       
       for (let i = 0; i < cropResults.length; i++) {
         const cropResult = cropResults[i];
@@ -562,6 +567,28 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
         // PostProcess validation step
         let validationResult = null;
         let finalConfidence = detection.confidence;
+        
+        if (postProcessValidator) {
+          setProcessingStep(`Validating card ${i + 1} of ${validDetections.length}...`);
+          console.log(`🔍 PostProcess validation for card ${i + 1}...`);
+          
+          try {
+            validationResult = await postProcessValidator.validateExtractedCard(cropResult, detection);
+            finalConfidence = validationResult.adjustedConfidence;
+            
+            console.log(`✅ Validation complete for card ${i + 1}:`);
+            console.log(`   Valid: ${validationResult.isValid}`);
+            console.log(`   Score: ${validationResult.validationScore}/100`);
+            console.log(`   Confidence: ${(detection.confidence * 100).toFixed(1)}% → ${(finalConfidence * 100).toFixed(1)}% (${validationResult.confidenceAdjustment >= 0 ? '+' : ''}${(validationResult.confidenceAdjustment * 100).toFixed(1)}%)`);
+            
+            if (validationResult.recommendations.length > 0) {
+              console.log(`   Recommendations: ${validationResult.recommendations.join(', ')}`);
+            }
+          } catch (error) {
+            console.error(`❌ PostProcess validation failed for card ${i + 1}:`, error);
+            validationResult = null; // Use original confidence on validation failure
+          }
+        }
         
         
         const extractedCard = {

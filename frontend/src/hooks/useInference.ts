@@ -12,6 +12,7 @@ import {
   CardDetection,
 } from '../store/slices/inferenceSlice';
 import { ModelManager, ModelConfig, ModelPrediction } from '../utils/ModelManager';
+import { PerformanceMonitor } from '../utils/PerformanceMonitor';
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   modelPath: `${process.env.PUBLIC_URL || ''}/models/trading_card_detector.onnx`,
@@ -26,10 +27,16 @@ export const useInference = () => {
   const dispatch = useAppDispatch();
   const inferenceState = useAppSelector((state: any) => state.inference);
   const modelManagerRef = useRef<ModelManager | null>(null);
+  const performanceMonitorRef = useRef<PerformanceMonitor | null>(null);
 
-  // Initialize model manager
+  // Initialize model manager and performance monitor
   useEffect(() => {
     modelManagerRef.current = new ModelManager(DEFAULT_MODEL_CONFIG);
+    performanceMonitorRef.current = new PerformanceMonitor();
+    
+    // Make performance monitor available globally for debugging
+    (window as any).performanceMonitor = performanceMonitorRef.current;
+    console.log('🔧 Performance monitor available at window.performanceMonitor');
   }, []);
 
   const loadModel = useCallback(async (modelPath?: string) => {
@@ -86,6 +93,21 @@ export const useInference = () => {
       const startTime = performance.now();
       const prediction = await modelManagerRef.current.predict(imageData);
       const processingTime = performance.now() - startTime;
+
+      // Record performance metrics
+      if (performanceMonitorRef.current && modelManagerRef.current) {
+        const config = modelManagerRef.current.getConfig();
+        performanceMonitorRef.current.recordMetrics({
+          inferenceTime: processingTime,
+          preprocessingTime: 0, // Not separately tracked in current implementation
+          postprocessingTime: 0, // Not separately tracked in current implementation
+          totalTime: processingTime,
+          executionProvider: config.executionProviders[0] || 'unknown',
+          modelPath: config.modelPath,
+          inputSize: { width: imageData.width, height: imageData.height },
+          timestamp: Date.now()
+        });
+      }
 
       // Convert model prediction to inference result
       const result: InferenceResult = {
@@ -171,6 +193,8 @@ export const useInference = () => {
     runInference,
     runBatchInference,
     updateModelConfig,
+    modelManager: modelManagerRef.current, // Expose ModelManager for PostProcessValidator
+    performanceMonitor: performanceMonitorRef.current, // Expose PerformanceMonitor
   };
 };
 

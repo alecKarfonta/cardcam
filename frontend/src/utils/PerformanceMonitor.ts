@@ -26,7 +26,7 @@ export interface PerformanceStats {
   }>;
 }
 
-class PerformanceMonitor {
+export class PerformanceMonitor {
   private metrics: PerformanceMetrics[] = [];
   private maxSamples = 100; // Keep last 100 measurements
 
