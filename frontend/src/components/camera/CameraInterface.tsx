@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useCamera } from '../../hooks/useCamera';
-import { useBackboneInference } from '../../hooks/useBackboneInference';
+import { useInference } from '../../hooks/useInference';
 import { DetectionOverlay } from './DetectionOverlay';
 import { CardDetectionSystem } from '../../utils/CardDetectionSystem';
 import './CameraInterface.css';
@@ -37,7 +37,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     lastResult,
     loadModel,
     runInference
-  } = useBackboneInference();
+  } = useInference();
 
   // Capture current frame with detections for debugging
   const captureDebugFrame = () => {
