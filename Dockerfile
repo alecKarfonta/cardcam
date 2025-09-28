@@ -1,5 +1,5 @@
 # Trading Card Segmentation Development Environment
-FROM nvidia/cuda:11.8-devel-ubuntu22.04
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -35,8 +35,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Install PyTorch with CUDA support
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# PyTorch is already installed in the base image with CUDA support
+# RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Install Detectron2
 RUN pip3 install 'git+https://github.com/facebookresearch/detectron2.git'

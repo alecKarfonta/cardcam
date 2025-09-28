@@ -115,6 +115,14 @@
 - **Debug Tool**: ✅ Available at http://localhost:3001/debug_onnx.html
 - **Root Cause**: RESOLVED - Now have complete OBB pipeline with modern opset
 
+## CUDA Docker Issue Resolution (2025-09-28)
+- **Problem**: `nvidia/cuda:11.8-devel-ubuntu22.04` image not available
+- **Root Cause**: NVIDIA CUDA Docker images deprecated/moved from Docker Hub
+- **Solution**: Updated to `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel`
+- **GPU Hardware**: ✅ RTX 5090 with driver 575.64.03 working
+- **Docker Runtime**: ✅ NVIDIA runtime available and functional
+- **Status**: GPU access working despite sm_120 compatibility warnings
+
 ## Network Architecture
 
 ### Connection Flow

@@ -115,7 +115,7 @@ def annotation_pipeline(image):
 - **Formats**: Multiple card games, sizes, orientations, and eras
 
 ### Data Augmentation Pipeline
-
+Label Studio user interface for lableing.
 **Card-Specific Augmentations**:
 - **Geometric**: Rotation (±15°), perspective transform, scale (0.8-1.2x)
 - **Photometric**: Brightness (±20%), contrast enhancement, hue shift
