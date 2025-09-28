@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Model Loading</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .loading { background-color: #fff3cd; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Model Loading Test</h1>
+    <p>Test if the ONNX model loads correctly in the browser</p>
+    
+    <button onclick="testModelLoading()">Test Model Loading</button>
+    <div id="status" class="status">Ready to test</div>
+    <div id="details"></div>
+
+    <script type="module">
+        import * as ort from './frontend/public/onnx/ort.all.min.mjs';
+        
+        // Configure ONNX Runtime
+        ort.env.wasm.wasmPaths = './frontend/public/onnx/';
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.simd = false;
+        ort.env.wasm.proxy = false;
+        
+        window.testModelLoading = async function() {
+            const statusDiv = document.getElementById('status');
+            const detailsDiv = document.getElementById('details');
+            
+            try {
+                statusDiv.className = 'status loading';
+                statusDiv.textContent = 'Loading ONNX model...';
+                
+                console.log('🔧 ONNX Runtime configuration:', {
+                    wasmPaths: ort.env.wasm.wasmPaths,
+                    numThreads: ort.env.wasm.numThreads,
+                    simd: ort.env.wasm.simd,
+                    proxy: ort.env.wasm.proxy
+                });
+                
+                const modelPath = './frontend/public/models/trading_card_detector.onnx';
+                console.log('📁 Loading model from:', modelPath);
+                
+                const session = await ort.InferenceSession.create(modelPath, {
+                    executionProviders: ['wasm'],
+                    graphOptimizationLevel: 'basic',
+                    enableMemPattern: false,
+                    enableCpuMemArena: false,
+                });
+                
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Model loaded successfully!';
+                
+                detailsDiv.innerHTML = `
+                    <h3>Model Information</h3>
+                    <p><strong>Input Names:</strong> ${session.inputNames.join(', ')}</p>
+                    <p><strong>Output Names:</strong> ${session.outputNames.join(', ')}</p>
+                    <p><strong>Model Path:</strong> ${modelPath}</p>
+                    <p><strong>Execution Providers:</strong> wasm</p>
+                    
+                    <h3>Expected Format</h3>
+                    <p><strong>Input:</strong> [1, 3, 1088, 1088] - RGB image tensor</p>
+                    <p><strong>Output:</strong> [1, 300, 7] - NMS-filtered detections</p>
+                    <p><strong>Detection Format:</strong> [cx, cy, w, h, conf, class, angle]</p>
+                `;
+                
+                console.log('✅ Model loaded successfully!');
+                console.log('📥 Input names:', session.inputNames);
+                console.log('📤 Output names:', session.outputNames);
+                
+                // Clean up
+                await session.release();
+                
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Failed to load model: ${error.message}`;
+                
+                detailsDiv.innerHTML = `
+                    <h3>Error Details</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Type:</strong> ${error.constructor.name}</p>
+                    <p><strong>Stack:</strong></p>
+                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">${error.stack}</pre>
+                    
+                    <h3>Troubleshooting</h3>
+                    <ul>
+                        <li>Check if the model file exists at: <code>./frontend/public/models/trading_card_detector.onnx</code></li>
+                        <li>Verify the model file is not corrupted (should be ~11MB)</li>
+                        <li>Ensure ONNX Runtime WASM files are available</li>
+                        <li>Check browser console for additional errors</li>
+                    </ul>
+                `;
+                
+                console.error('❌ Model loading failed:', error);
+            }
+        };
+    </script>
+</body>
+</html>

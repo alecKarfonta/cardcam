@@ -128,10 +128,15 @@ function drawDetection(
   }
 
   if (isRotated && corners && corners.length === 4) {
-    // Convert normalized corner coordinates to canvas pixel coordinates
+    // Corners are already in image pixel coordinates from convertPredictionToDetections
+    // We need to scale them to canvas coordinates
+    // canvasWidth/canvasHeight are the video dimensions, ctx.canvas.width/height are the actual canvas size
+    const scaleX = ctx.canvas.width / canvasWidth;
+    const scaleY = ctx.canvas.height / canvasHeight;
+    
     const canvasCorners = corners.map(corner => ({
-      x: corner.x * ctx.canvas.width,
-      y: corner.y * ctx.canvas.height
+      x: corner.x * scaleX,
+      y: corner.y * scaleY
     }));
     
     // Draw rotated bounding box using corner points
@@ -145,17 +150,21 @@ function drawDetection(
       drawConfidenceLabel(ctx, canvasCorners[0].x, canvasCorners[0].y, confidence, strokeColor);
     }
   } else {
-    // Convert normalized bounding box coordinates to canvas pixel coordinates
-    const canvasX = boundingBox.x * ctx.canvas.width;
-    const canvasY = boundingBox.y * ctx.canvas.height;
-    const canvasWidth = boundingBox.width * ctx.canvas.width;
-    const canvasHeight = boundingBox.height * ctx.canvas.height;
+    // Bounding box coordinates are already in image pixel coordinates from convertPredictionToDetections
+    // Scale them to canvas coordinates
+    const scaleX = ctx.canvas.width / canvasWidth;
+    const scaleY = ctx.canvas.height / canvasHeight;
     
-    ctx.fillRect(canvasX, canvasY, canvasWidth, canvasHeight);
-    ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight);
+    const canvasX = boundingBox.x * scaleX;
+    const canvasY = boundingBox.y * scaleY;
+    const canvasBoxWidth = boundingBox.width * scaleX;
+    const canvasBoxHeight = boundingBox.height * scaleY;
+    
+    ctx.fillRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
+    ctx.strokeRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
     
     // Draw corners for better visibility
-    drawCorners(ctx, canvasX, canvasY, canvasWidth, canvasHeight, strokeColor, isPrimary);
+    drawCorners(ctx, canvasX, canvasY, canvasBoxWidth, canvasBoxHeight, strokeColor, isPrimary);
     
     // Draw confidence label
     if (isPrimary) {
