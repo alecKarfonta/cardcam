@@ -79,18 +79,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
         };
       }
 
-      // Debug logging for scaling issues
-      console.log(`🔍 DetectionOverlay updateCanvasSize:`, {
-        videoNative: `${videoNativeWidth}x${videoNativeHeight}`,
-        videoRendered: `${canvasWidth.toFixed(1)}x${canvasHeight.toFixed(1)}`,
-        canvasBefore: `${canvas.width}x${canvas.height}`,
-        windowSize: `${window.innerWidth}x${window.innerHeight}`,
-        aspectRatios: `native:${videoNativeAspect.toFixed(2)} container:${containerAspect.toFixed(2)}`,
-        visibleArea: `${visibleVideoInfo.visibleWidth.toFixed(1)}x${visibleVideoInfo.visibleHeight.toFixed(1)}`,
-        offset: `${visibleVideoInfo.offsetX.toFixed(1)},${visibleVideoInfo.offsetY.toFixed(1)}`,
-        scale: `${visibleVideoInfo.scaleX.toFixed(3)}`
-      });
-
       // Store visible video info for use in drawing functions
       (canvas as any).visibleVideoInfo = visibleVideoInfo;
 
@@ -106,10 +94,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
       // Debug canvas and detection info
       if (filteredDetections.length > 0) {
-        console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} total detections, ${filteredDetections.length} after confidence filter (>=${confidenceThreshold})`);
-        console.log(`🖼️ Video native size: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
-        console.log(`🖼️ Video rendered size: ${canvasWidth}x${canvasHeight}`);
-        
         filteredDetections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
           console.log(`  Detection ${index}:`, {
             boundingBox: `x:${detection.boundingBox.x.toFixed(1)}, y:${detection.boundingBox.y.toFixed(1)}, w:${detection.boundingBox.width.toFixed(1)}, h:${detection.boundingBox.height.toFixed(1)}`,
