@@ -27,21 +27,80 @@ train_params:
   batch_size: 16           # Adjust based on GPU memory
   workers: 8               # Number of data loading workers
   
-# Data augmentation settings (for OBB)
+# Data augmentation settings (for OBB) - Enhanced for orientation robustness
 augmentation:
-  hsv_h: 0.015    # Image HSV-Hue augmentation (fraction)
+  # Geometric augmentations - enhanced for orientation variations
+  hsv_h: 0.02     # Image HSV-Hue augmentation (fraction) - increased
   hsv_s: 0.7      # Image HSV-Saturation augmentation (fraction)  
   hsv_v: 0.4      # Image HSV-Value augmentation (fraction)
-  degrees: 45.0   # Image rotation (+/- deg)
-  translate: 0.1  # Image translation (+/- fraction)
-  scale: 0.5      # Image scale (+/- gain)
-  shear: 0.0      # Image shear (+/- deg)
-  perspective: 0.0 # Image perspective (+/- fraction), range 0-0.001
-  flipud: 0.0     # Image flip up-down (probability)
+  degrees: 60.0   # Image rotation (+/- deg) - increased for better orientation handling
+  translate: 0.15 # Image translation (+/- fraction) - increased
+  scale: 0.6      # Image scale (+/- gain) - increased range
+  shear: 20.0     # Image shear (+/- deg) - added shear for perspective variations
+  perspective: 0.0005 # Image perspective (+/- fraction) - added perspective transform
+  
+  # Flip augmentations - enhanced for orientation diversity
+  flipud: 0.3     # Image flip up-down (probability) - increased for orientation variety
   fliplr: 0.5     # Image flip left-right (probability)
+  
+  # Advanced augmentations
   mosaic: 1.0     # Image mosaic (probability)
-  mixup: 0.0      # Image mixup (probability)
-  copy_paste: 0.0 # Segment copy-paste (probability)
+  mixup: 0.1      # Image mixup (probability) - light mixup for robustness
+  copy_paste: 0.15 # Segment copy-paste (probability) - increased for data diversity
+  
+  # Quality and robustness augmentations
+  noise: 0.02     # Gaussian noise probability
+  blur: 0.01      # Motion blur probability
+  
+  # Advanced augmentation techniques
+  auto_augment: "randaugment"  # Auto augmentation policy (randaugment/autoaugment/augmix)
+  erasing: 0.4    # Random erasing probability (cutout-style augmentation)
+  
+  # Crop and resize augmentations
+  crop_fraction: 1.0  # Crop fraction for training (1.0 = no crop)
+  
+  # Lighting and exposure variations
+  brightness_range: 0.2    # Brightness variation range
+  contrast_range: 0.2      # Contrast variation range
+  saturation_range: 0.2    # Saturation variation range
+  
+  # Advanced geometric distortions
+  elastic_alpha: 1.0       # Elastic transformation alpha
+  elastic_sigma: 50.0      # Elastic transformation sigma
+  optical_distortion: 0.1  # Optical distortion probability
+  grid_distortion: 0.1     # Grid distortion probability
+  
+  # Texture and surface augmentations
+  gaussian_blur: 0.05      # Gaussian blur probability
+  motion_blur: 0.05        # Motion blur probability
+  median_blur: 0.02        # Median blur probability
+  
+  # Environmental simulation
+  shadow: 0.1              # Shadow augmentation probability
+  fog: 0.05                # Fog effect probability
+  sun_flare: 0.02          # Sun flare probability
+  
+  # Card-specific augmentations
+  holographic_effect: 0.1  # Simulate holographic card effects
+  sleeve_reflection: 0.15  # Simulate card sleeve reflections
+  surface_glare: 0.2       # Simulate surface glare and reflections
+  
+# Albumentations integration settings
+albumentations:
+  enabled: true   # Enable albumentations pipeline
+  intensity: "medium"  # Augmentation intensity: "heavy", "medium", "light"
+  
+  # Orientation-specific settings
+  orientation_focus: true
+  max_rotation: 60    # Maximum rotation in degrees
+  perspective_scale: 0.08  # Perspective transformation scale
+  shear_limit: 20     # Shear transformation limit
+  
+  # Photometric augmentation probabilities
+  brightness_contrast_prob: 0.7
+  color_jitter_prob: 0.5
+  noise_prob: 0.3
+  blur_prob: 0.2
 
 # Model architecture settings
 model:
@@ -85,7 +144,7 @@ validation:
 # Logging and checkpoints
 logging:
   project: "trading_cards_obb"  # Project name
-  name: "yolo11n_obb_v1"       # Experiment name
+  name: "yolo11n_obb_v1.1"       # Experiment name
   save_dir: "../outputs/training" # Save directory
   exist_ok: True               # Overwrite existing project/name
   plots: True                  # Save training plots

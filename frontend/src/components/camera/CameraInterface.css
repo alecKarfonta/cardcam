@@ -1,0 +1,369 @@
+.camera-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.camera-viewport {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror for selfie mode */
+}
+
+.processing-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.detection-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.camera-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 3;
+}
+
+.capture-button {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.capture-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.capture-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.capture-button.ready {
+  border-color: #4CAF50;
+  background: rgba(76, 175, 80, 0.3);
+  animation: pulse-ready 2s infinite;
+}
+
+.capture-button.detected {
+  border-color: #FF9800;
+  background: rgba(255, 152, 0, 0.3);
+}
+
+.capture-button.positioned {
+  border-color: #2196F3;
+  background: rgba(33, 150, 243, 0.3);
+}
+
+.capture-button.processing {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse-ready {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.camera-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  position: relative;
+}
+
+.camera-icon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  transform: translate(-50%, -50%);
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.secondary-control {
+  position: absolute;
+  right: 30px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.secondary-control:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fff;
+}
+
+.secondary-control:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.flip-icon {
+  width: 24px;
+  height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 12l1.42 1.42L8.83 15H18V9h-2V7h4v10H8.83l1.59 1.58L9 20l-4-4 4-4z'/%3E%3C/svg%3E") no-repeat center;
+  background-size: contain;
+}
+
+.positioning-guide {
+  position: absolute;
+  top: 80px;
+  left: 20px;
+  right: 20px;
+  text-align: center;
+  z-index: 3;
+  padding: 12px 20px;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.positioning-guide.detected {
+  background: rgba(255, 152, 0, 0.9);
+  color: #fff;
+}
+
+.positioning-guide.positioned {
+  background: rgba(33, 150, 243, 0.9);
+  color: #fff;
+}
+
+.positioning-guide.ready {
+  background: rgba(76, 175, 80, 0.9);
+  color: #fff;
+  animation: pulse-guide 1.5s infinite;
+}
+
+@keyframes pulse-guide {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+
+.positioning-guide p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.camera-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  z-index: 4;
+}
+
+.camera-loading p {
+  margin-top: 20px;
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+.camera-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.error-content {
+  text-align: center;
+  color: #fff;
+  padding: 40px;
+  max-width: 400px;
+}
+
+.error-content h3 {
+  margin: 0 0 20px 0;
+  font-size: 24px;
+  color: #FF5722;
+}
+
+.error-content p {
+  margin: 0 0 30px 0;
+  font-size: 16px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.retry-button {
+  padding: 12px 24px;
+  border: 2px solid #2196F3;
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196F3;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.retry-button:hover {
+  background: rgba(33, 150, 243, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .camera-controls {
+    height: 100px;
+    padding: 15px;
+  }
+  
+  .capture-button {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .camera-icon {
+    width: 25px;
+    height: 25px;
+  }
+  
+  .secondary-control {
+    width: 45px;
+    height: 45px;
+    right: 20px;
+  }
+  
+  .positioning-guide {
+    top: 60px;
+    left: 15px;
+    right: 15px;
+    padding: 10px 15px;
+  }
+  
+  .positioning-guide p {
+    font-size: 14px;
+  }
+}
+
+/* Model status indicators */
+.model-status,
+.model-loading {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 4;
+  backdrop-filter: blur(10px);
+}
+
+.model-status {
+  background: rgba(255, 152, 0, 0.9);
+}
+
+.model-loading {
+  background: rgba(33, 150, 243, 0.9);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-loading .loading-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* Landscape mode adjustments */
+@media (orientation: landscape) and (max-height: 500px) {
+  .camera-controls {
+    height: 80px;
+    padding: 10px;
+  }
+  
+  .positioning-guide {
+    top: 20px;
+  }
+  
+  .camera-loading {
+    top: 40%;
+  }
+  
+  .model-status,
+  .model-loading {
+    top: 10px;
+    right: 10px;
+    font-size: 11px;
+  }
+}

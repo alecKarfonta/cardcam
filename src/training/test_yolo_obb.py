@@ -177,7 +177,7 @@ def main():
     """Main testing function."""
     parser = argparse.ArgumentParser(description="Test trained YOLO OBB model")
     
-    parser.add_argument("--model", type=str, default="trading_cards_obb/yolo11n_obb_gpu_rtx5090/weights/best.pt", help="Path to model weights")
+    parser.add_argument("--model", type=str, default="training/trading_cards_obb/yolo11n_obb_v14/weights/best.pt", help="Path to model weights")
     parser.add_argument("--data", type=str, default="configs/yolo_obb_dataset.yaml", help="Dataset config file")
     parser.add_argument("--test-images", type=str, nargs="+", help="Specific test images")
     parser.add_argument("--output", type=str, default="outputs/model_testing", help="Output directory")

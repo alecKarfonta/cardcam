@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SceneConfig:
-    """Configuration for scene generation."""
+    """Configuration for scene generation with enhanced orientation support."""
     output_size: Tuple[int, int] = (1024, 768)
     min_cards: int = 1
     max_cards: int = 8
@@ -43,9 +43,13 @@ class SceneConfig:
     max_card_size: int = 300
     overlap_probability: float = 0.3
     max_overlap: float = 0.4
-    rotation_range: Tuple[float, float] = (-15, 15)
+    rotation_range: Tuple[float, float] = (-180, 180)  # Full rotation range for orientation robustness
     perspective_probability: float = 0.4
     lighting_probability: float = 0.6
+    
+    # Enhanced orientation settings
+    common_orientation_bias: float = 0.6  # Probability of using common orientations (0°, 90°, 180°, 270°)
+    orientation_variation: float = 15.0   # Variation around common orientations in degrees
 
 
 # Global variables for multiprocessing
@@ -111,15 +115,62 @@ def generate_background(size: Tuple[int, int]) -> np.ndarray:
 
 
 def transform_card(card_image: np.ndarray, rotation: float, scale: float) -> Tuple[np.ndarray, np.ndarray, Dict]:
-    """Transform a card image with rotation and scaling."""
-    # Simple augmentations
-    if random.random() < 0.7:
-        brightness = random.uniform(0.8, 1.2)
-        card_image = np.clip(card_image * brightness, 0, 255).astype(np.uint8)
+    """Transform a card image with rotation and scaling using enhanced albumentations."""
     
-    if random.random() < 0.5:
-        contrast = random.uniform(0.9, 1.1)
-        card_image = np.clip((card_image - 128) * contrast + 128, 0, 255).astype(np.uint8)
+    # Enhanced albumentations pipeline for individual cards
+    card_augmentation = A.Compose([
+        # Photometric augmentations with higher variation for robustness
+        A.OneOf([
+            A.RandomBrightnessContrast(
+                brightness_limit=0.3, 
+                contrast_limit=0.3, 
+                p=1.0
+            ),
+            A.RandomGamma(gamma_limit=(70, 130), p=1.0),
+            A.CLAHE(clip_limit=4.0, tile_grid_size=(8, 8), p=1.0),
+        ], p=0.7),
+        
+        # Color variations for different lighting conditions
+        A.OneOf([
+            A.HueSaturationValue(
+                hue_shift_limit=15,
+                sat_shift_limit=25,
+                val_shift_limit=20,
+                p=1.0
+            ),
+            A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=1.0),
+            A.ChannelShuffle(p=1.0),
+        ], p=0.4),
+        
+        # Noise for robustness to image quality variations
+        A.OneOf([
+            A.GaussNoise(var_limit=(5.0, 25.0), p=1.0),
+            A.ISONoise(color_shift=(0.01, 0.03), intensity=(0.1, 0.3), p=1.0),
+            A.MultiplicativeNoise(multiplier=(0.95, 1.05), p=1.0),
+        ], p=0.3),
+        
+        # Subtle blur effects that might occur in real photos
+        A.OneOf([
+            A.MotionBlur(blur_limit=3, p=1.0),
+            A.MedianBlur(blur_limit=3, p=1.0),
+            A.GaussianBlur(blur_limit=3, p=1.0),
+        ], p=0.15),
+        
+    ])
+    
+    # Apply albumentations
+    try:
+        augmented = card_augmentation(image=card_image)
+        card_image = augmented['image']
+    except Exception as e:
+        # Fallback to simple augmentations if albumentations fails
+        if random.random() < 0.7:
+            brightness = random.uniform(0.8, 1.2)
+            card_image = np.clip(card_image * brightness, 0, 255).astype(np.uint8)
+        
+        if random.random() < 0.5:
+            contrast = random.uniform(0.9, 1.1)
+            card_image = np.clip((card_image - 128) * contrast + 128, 0, 255).astype(np.uint8)
     
     height, width = card_image.shape[:2]
     
@@ -266,12 +317,21 @@ def generate_single_scene(args):
             if card_image is None:
                 continue
             
-            # Generate transformation parameters
+            # Generate enhanced transformation parameters for orientation robustness
             scale = random.uniform(
                 CONFIG.min_card_size / max(card_image.shape[:2]),
                 CONFIG.max_card_size / max(card_image.shape[:2])
             )
-            rotation = random.uniform(*CONFIG.rotation_range)
+            
+            # Enhanced rotation range with bias towards common orientations
+            if random.random() < CONFIG.common_orientation_bias:
+                # Common orientations (0°, 90°, 180°, 270°) with small variations
+                base_angles = [0, 90, 180, 270]
+                base_angle = random.choice(base_angles)
+                rotation = base_angle + random.uniform(-CONFIG.orientation_variation, CONFIG.orientation_variation)
+            else:
+                # Random orientations for full coverage
+                rotation = random.uniform(*CONFIG.rotation_range)
             
             # Transform card
             transformed_card, card_mask, transform_info = transform_card(card_image, rotation, scale)
@@ -313,10 +373,42 @@ def generate_single_scene(args):
             # Update occupied regions
             occupied_regions.append((x, y, x + card_w, y + card_h))
         
-        # Apply scene-level effects
-        if random.random() < CONFIG.lighting_probability:
-            brightness_factor = random.uniform(0.8, 1.2)
-            scene = np.clip(scene * brightness_factor, 0, 255).astype(np.uint8)
+        # Apply enhanced scene-level effects using albumentations
+        scene_augmentation = A.Compose([
+            # Lighting and exposure variations
+            A.OneOf([
+                A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
+                A.RandomGamma(gamma_limit=(80, 120), p=1.0),
+                A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0),
+            ], p=CONFIG.lighting_probability),
+            
+            # Color temperature variations (simulating different lighting conditions)
+            A.OneOf([
+                A.HueSaturationValue(hue_shift_limit=5, sat_shift_limit=15, val_shift_limit=10, p=1.0),
+                A.RGBShift(r_shift_limit=15, g_shift_limit=15, b_shift_limit=15, p=1.0),
+            ], p=0.3),
+            
+            # Environmental effects
+            A.OneOf([
+                A.GaussNoise(var_limit=(3.0, 15.0), p=1.0),  # Camera sensor noise
+                A.ISONoise(color_shift=(0.01, 0.02), intensity=(0.05, 0.2), p=1.0),  # ISO noise
+            ], p=0.2),
+            
+            # Slight blur from camera shake or motion
+            A.OneOf([
+                A.MotionBlur(blur_limit=3, p=1.0),
+                A.GaussianBlur(blur_limit=2, p=1.0),
+            ], p=0.1),
+        ])
+        
+        try:
+            augmented_scene = scene_augmentation(image=scene)
+            scene = augmented_scene['image']
+        except Exception as e:
+            # Fallback to simple brightness adjustment
+            if random.random() < CONFIG.lighting_probability:
+                brightness_factor = random.uniform(0.8, 1.2)
+                scene = np.clip(scene * brightness_factor, 0, 255).astype(np.uint8)
         
         # Save image
         image_filename = f"{split}_{scene_index:06d}.jpg"

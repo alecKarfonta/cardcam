@@ -1,0 +1,20 @@
+{
+  "name": "pokemon-detection-test",
+  "version": "1.0.0",
+  "description": "Standalone test for Pokemon card detection using same TypeScript logic as frontend",
+  "main": "test_detection.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node dist/test_detection.js",
+    "dev": "ts-node test_detection.ts"
+  },
+  "dependencies": {
+    "onnxruntime-node": "^1.23.0",
+    "canvas": "^2.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}

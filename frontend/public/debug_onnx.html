@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ONNX Model Debug</title>
+    <script src="/onnx/ort.bundle.min.mjs" type="module"></script>
+</head>
+<body>
+    <h1>ONNX Model Loading Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            results.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        async function testModel(modelPath) {
+            log(`Testing model: ${modelPath}`);
+            try {
+                // Import ONNX Runtime
+                const ort = await import('/onnx/ort.bundle.min.mjs');
+                
+                // Configure ONNX Runtime with different settings
+                ort.env.wasm.wasmPaths = '/onnx/';
+                ort.env.wasm.numThreads = 1;
+                ort.env.wasm.simd = false;
+                ort.env.wasm.proxy = false;
+                
+                log('ONNX Runtime configured');
+                
+                // Try multiple session configurations
+                const configs = [
+                    {
+                        name: 'Basic WASM',
+                        options: {
+                            executionProviders: ['wasm'],
+                            graphOptimizationLevel: 'disabled',
+                            enableMemPattern: false,
+                            enableCpuMemArena: false,
+                        }
+                    },
+                    {
+                        name: 'WASM with basic optimization',
+                        options: {
+                            executionProviders: ['wasm'],
+                            graphOptimizationLevel: 'basic',
+                            enableMemPattern: false,
+                            enableCpuMemArena: false,
+                        }
+                    },
+                    {
+                        name: 'CPU fallback',
+                        options: {
+                            executionProviders: ['cpu'],
+                            graphOptimizationLevel: 'disabled',
+                        }
+                    }
+                ];
+                
+                for (const config of configs) {
+                    try {
+                        log(`  Trying ${config.name}...`);
+                        const session = await ort.InferenceSession.create(modelPath, config.options);
+                        log(`  ✅ SUCCESS with ${config.name}!`);
+                        log(`  Input names: ${session.inputNames.join(', ')}`);
+                        log(`  Output names: ${session.outputNames.join(', ')}`);
+                        await session.release();
+                        return true;
+                    } catch (error) {
+                        log(`  ❌ ${config.name} failed: ${error.message}`);
+                    }
+                }
+                
+                return false;
+                
+            } catch (error) {
+                log(`❌ FAILED: ${modelPath} - ${error.message}`);
+                return false;
+            }
+        }
+        
+        async function testAllModels() {
+            const models = [
+                '/models/trading_card_detector_backbone_opset18.onnx',
+                '/models/trading_card_detector_backbone.onnx',
+                '/models/trading_card_detector.onnx',
+                '/models/trading_card_detector_1080.onnx',
+                '/models/trading_card_detector_1088.onnx',
+                '/models/trading_card_detector_1088_v2.onnx',
+                '/models/trading_card_detector_1088_final.onnx'
+            ];
+            
+            log('Starting ONNX model compatibility test...');
+            
+            for (const model of models) {
+                await testModel(model);
+                log('---');
+            }
+            
+            log('Test complete!');
+        }
+        
+        // Start the test
+        testAllModels();
+    </script>
+</body>
+</html>

@@ -4,17 +4,17 @@ import { BackboneModelConfig } from '../utils/BackboneModelManager';
  * Configuration for the YOLO OBB backbone model with JavaScript NMS
  */
 export const BACKBONE_MODEL_CONFIG: BackboneModelConfig = {
-  modelPath: '/models/trading_card_detector_1080.onnx',
-  inputSize: 1080, // Model input size
+  modelPath: '/models/trading_card_detector_backbone.onnx',
+  inputSize: 1088, // Model input size from model_info.json
   executionProviders: [
-    'webgl', // Try WebGL first for GPU acceleration
-    'wasm'   // Fallback to WASM CPU
+    'webgl', // Try WebGL first with ONNX Runtime 1.23.0
+    'wasm'   // Fallback to WASM
   ],
   nmsConfig: {
     confidenceThreshold: 0.8,  // High threshold to match validation results (0.82+)
     nmsThreshold: 0.4,         // Stricter NMS threshold
     maxDetections: 3,          // Very few detections for clean results
-    inputSize: 1080            // Must match model input size
+    inputSize: 1088            // Must match model input size
   }
 };
 
@@ -28,7 +28,8 @@ export const CPU_MODEL_CONFIG: BackboneModelConfig = {
     ...BACKBONE_MODEL_CONFIG.nmsConfig,
     confidenceThreshold: 0.8, // High threshold to match validation
     nmsThreshold: 0.4,        // Stricter NMS for clean results
-    maxDetections: 3          // Fewer detections for performance
+    maxDetections: 3,         // Fewer detections for performance
+    inputSize: 1088            // Must match model input size
   }
 };
 
@@ -41,7 +42,8 @@ export const HIGH_PERFORMANCE_CONFIG: BackboneModelConfig = {
     ...BACKBONE_MODEL_CONFIG.nmsConfig,
     confidenceThreshold: 0.8, // High threshold to match validation
     nmsThreshold: 0.4,        // Stricter NMS for cleaner results
-    maxDetections: 3          // Fewer detections for clean results
+    maxDetections: 3,         // Fewer detections for clean results
+    inputSize: 1088            // Must match model input size
   }
 };
 
@@ -55,7 +57,8 @@ export const MOBILE_CONFIG: BackboneModelConfig = {
     ...BACKBONE_MODEL_CONFIG.nmsConfig,
     confidenceThreshold: 0.8, // High threshold for performance
     nmsThreshold: 0.4,        // Stricter NMS for clean results
-    maxDetections: 3          // Fewer detections for mobile
+    maxDetections: 3,         // Fewer detections for mobile
+    inputSize: 1088            // Must match model input size
   }
 };
 
