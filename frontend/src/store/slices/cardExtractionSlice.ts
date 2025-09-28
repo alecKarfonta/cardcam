@@ -16,6 +16,21 @@ export interface ExtractedCard {
     rarity?: string;
     condition?: string;
   };
+  // Enhanced metadata from high-resolution extraction
+  extractionMetadata?: {
+    cardId: string;
+    extractionMethod: 'bbox' | 'obb' | 'perspective' | 'fallback';
+    originalSize: { width: number; height: number };
+    modelInputSize: { width: number; height: number };
+    scalingFactors: { x: number; y: number };
+    confidence: number;
+    rotationAngle?: number;
+    corners?: Array<{ x: number; y: number }>;
+    paddingApplied: { x: number; y: number };
+    isHighResolution: boolean;
+  };
+  qualityScore?: number;
+  qualityFactors?: string[];
 }
 
 export interface ExtractionSession {

@@ -244,11 +244,8 @@ function drawDetection(
     const adjustedY = y - visibleVideoInfo.offsetY;
     
     // Scale to canvas coordinates
-    let canvasX = adjustedX * visibleVideoInfo.scaleX;
+    const canvasX = adjustedX * visibleVideoInfo.scaleX;
     const canvasY = adjustedY * visibleVideoInfo.scaleY;
-    
-    // FIX: Camera is horizontally mirrored - flip X coordinates
-    canvasX = ctx.canvas.width - canvasX;
     
     return { x: canvasX, y: canvasY };
   };
