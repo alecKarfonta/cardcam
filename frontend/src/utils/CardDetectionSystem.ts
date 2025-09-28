@@ -20,8 +20,8 @@ export interface CardPositioning {
 export class CardDetectionSystem {
   private detectionHistory: InferenceResult[] = [];
   private maxHistorySize: number = 10;
-  private stabilityThreshold: number = 0.8;
-  private confidenceThreshold: number = 0.7;
+  private stabilityThreshold: number = 0.6; // Lowered from 0.8
+  private confidenceThreshold: number = 0.5; // Lowered from 0.7
 
   constructor(options?: {
     maxHistorySize?: number;
@@ -124,33 +124,36 @@ export class CardDetectionSystem {
 
   private assessPositioning(detection: CardDetection): number {
     const { boundingBox } = detection;
-    const imageWidth = 1920; // TODO: Get from actual image dimensions
-    const imageHeight = 1080;
-
-    // Check if card is well-centered and appropriately sized
-    const centerX = boundingBox.x + boundingBox.width / 2;
-    const centerY = boundingBox.y + boundingBox.height / 2;
     
-    const imageCenterX = imageWidth / 2;
-    const imageCenterY = imageHeight / 2;
-
-    // Distance from center (normalized)
-    const centerDistance = Math.sqrt(
-      Math.pow((centerX - imageCenterX) / imageWidth, 2) +
-      Math.pow((centerY - imageCenterY) / imageHeight, 2)
-    );
-
-    // Size appropriateness (card should occupy reasonable portion of image)
+    // Only check if the card is reasonably sized (not too tiny or huge)
+    // Remove center positioning requirement - cards can be anywhere in frame
     const cardArea = boundingBox.width * boundingBox.height;
-    const imageArea = imageWidth * imageHeight;
-    const areaRatio = cardArea / imageArea;
     
-    const idealAreaRatio = 0.3; // 30% of image
-    const sizeScore = 1 - Math.abs(areaRatio - idealAreaRatio) / idealAreaRatio;
-
-    // Combine center and size scores
-    const centerScore = Math.max(0, 1 - centerDistance * 2);
-    return (centerScore + Math.max(0, sizeScore)) / 2;
+    // For normalized coordinates (0-1 range)
+    let normalizedArea = cardArea;
+    if (boundingBox.width <= 1 && boundingBox.height <= 1) {
+      normalizedArea = cardArea; // Already normalized
+    } else {
+      // Convert to normalized area assuming typical image dimensions
+      const imageWidth = 1920;
+      const imageHeight = 1080;
+      normalizedArea = cardArea / (imageWidth * imageHeight);
+    }
+    
+    // Accept cards that are between 1% and 80% of the image area
+    const minAreaRatio = 0.01; // 1% minimum
+    const maxAreaRatio = 0.80; // 80% maximum
+    
+    if (normalizedArea < minAreaRatio) {
+      return 0.3; // Too small, but not completely invalid
+    }
+    
+    if (normalizedArea > maxAreaRatio) {
+      return 0.5; // Too large, might be false detection
+    }
+    
+    // Good size range - return high score regardless of position
+    return 0.9;
   }
 
   private assessLighting(detection: CardDetection): number {
@@ -165,24 +168,24 @@ export class CardDetectionSystem {
   ): CardPositioning {
     const { score, factors } = quality;
 
-    if (score > 0.85) {
+    if (score > 0.6) {
       return {
         isWellPositioned: true,
-        feedback: 'Perfect! Tap to capture',
+        feedback: 'Ready! Tap to capture',
         quality,
       };
     }
 
-    if (score > 0.7) {
+    if (score > 0.4) {
       return {
         isWellPositioned: false,
-        feedback: 'Good positioning! Hold steady...',
+        feedback: 'Card detected! Hold steady...',
         quality,
         recommendedAction: 'hold_steady'
       };
     }
 
-    if (score > 0.5) {
+    if (score > 0.3) {
       // Determine primary issue
       const lowestFactor = Object.entries(factors).reduce((lowest, [key, value]) => 
         value < lowest.value ? { key, value } : lowest,
@@ -191,8 +194,8 @@ export class CardDetectionSystem {
 
       const feedbackMap: Record<string, string> = {
         stability: 'Hold the camera steady',
-        confidence: 'Move closer to the card',
-        positioning: 'Center the card in the frame',
+        confidence: 'Move closer or ensure card is clearly visible',
+        positioning: 'Card detected - adjusting focus',
         lighting: 'Improve lighting conditions',
       };
 

@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-export type AppView = 'camera' | 'gallery' | 'settings' | 'help';
+export type AppView = 'camera' | 'extraction' | 'gallery' | 'settings' | 'help';
 
 export interface AppNotification {
   id: string;

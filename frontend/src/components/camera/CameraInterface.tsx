@@ -1,8 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useCamera } from '../../hooks/useCamera';
 import { useInference } from '../../hooks/useInference';
+import { useAppDispatch } from '../../hooks/redux';
 import { DetectionOverlay } from './DetectionOverlay';
 import { CardDetectionSystem } from '../../utils/CardDetectionSystem';
+import { CardCropper } from '../../utils/CardCropper';
+import { setCurrentView } from '../../store/slices/appSlice';
+import { 
+  startExtraction, 
+  addExtractedCard, 
+  completeExtraction, 
+  updateExtractionProgress 
+} from '../../store/slices/cardExtractionSlice';
 import './CameraInterface.css';
 
 interface CameraInterfaceProps {
@@ -22,6 +31,8 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
   const [frameCount, setFrameCount] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.8);
   const modelLoadedRef = useRef<boolean>(false);
+  
+  const dispatch = useAppDispatch();
 
   const {
     cameraState,
@@ -260,7 +271,10 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
             if (positioning.isWellPositioned) {
               setDetectionState('ready');
             } else if (result.detections.length > 0) {
-              if (positioning.quality.score > 0.7) {
+              if (positioning.quality.score > 0.25) {
+                // Allow capture when cards are detected with any reasonable quality
+                setDetectionState('ready');
+              } else if (positioning.quality.score > 0.15) {
                 setDetectionState('positioned');
               } else {
                 setDetectionState('detected');
@@ -277,7 +291,9 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
   };
 
   const handleCapture = async () => {
-    if (!videoRef.current || !canvasRef.current || detectionState !== 'ready') return;
+    if (!videoRef.current || !canvasRef.current) return;
+    if (detectionState === 'searching' || detectionState === 'detected') return;
+    if (!lastResult?.detections || lastResult.detections.length === 0) return;
 
     setIsProcessing(true);
     
@@ -295,11 +311,69 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
+      // Filter detections by confidence threshold
+      const validDetections = lastResult.detections.filter(
+        (detection: any) => detection.confidence >= confidenceThreshold && 
+        CardCropper.isValidCardDetection(detection)
+      );
+
+      if (validDetections.length === 0) {
+        if (onError) {
+          onError('No valid cards detected above confidence threshold');
+        }
+        return;
+      }
+
+      // Start extraction process
+      dispatch(startExtraction({
+        sourceImageDimensions: {
+          width: imageData.width,
+          height: imageData.height
+        },
+        totalDetections: validDetections.length
+      }));
+
+      // Extract cards one by one
+      const cropResults = CardCropper.extractCards(imageData, validDetections);
+      
+      for (let i = 0; i < cropResults.length; i++) {
+        const cropResult = cropResults[i];
+        const detection = validDetections[i];
+        
+        dispatch(updateExtractionProgress({
+          current: i + 1,
+          status: `Extracting card ${i + 1} of ${validDetections.length}`
+        }));
+
+        const extractedCard = {
+          id: `extracted_${Date.now()}_${i}`,
+          imageData: cropResult.imageData,
+          originalDetection: detection,
+          extractedAt: Date.now(),
+          dimensions: {
+            width: cropResult.croppedWidth,
+            height: cropResult.croppedHeight
+          }
+        };
+
+        dispatch(addExtractedCard(extractedCard));
+        
+        // Small delay to show progress
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Complete extraction and navigate to extraction view
+      dispatch(completeExtraction());
+      dispatch(setCurrentView('extraction'));
+
+      // Call original onCapture if provided
       if (onCapture) {
         onCapture(imageData);
       }
+
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Capture failed';
+      const errorMessage = error instanceof Error ? error.message : 'Card extraction failed';
+      console.error('Card extraction error:', error);
       if (onError) {
         onError(errorMessage);
       }
@@ -384,6 +458,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
         <div>Backbone Model: {modelState.isLoaded ? 'loaded' : (modelState.isLoading ? 'loading' : 'idle')}</div>
         <div>JS NMS: {modelState.isLoaded ? 'active' : 'inactive'}</div>
         <div>Detections: {lastResult?.detections?.filter((d: any) => d.confidence >= confidenceThreshold).length ?? 0} / {lastResult?.detections?.length ?? 0}</div>
+        <div>State: {detectionState} | Quality: {detectionSystemRef.current.analyzeCardPositioning().quality.score.toFixed(2)}</div>
         <button 
           onClick={captureDebugFrame}
           disabled={cameraState.status !== 'streaming' && cameraState.status !== 'processing'}
@@ -427,7 +502,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
         <button
           className={`capture-button ${detectionState} ${isProcessing ? 'processing' : ''}`}
           onClick={handleCapture}
-          disabled={detectionState !== 'ready' || isProcessing}
+          disabled={detectionState === 'searching' || detectionState === 'detected' || isProcessing}
         >
           {isProcessing ? (
             <div className="loading-spinner" />

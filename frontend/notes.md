@@ -154,6 +154,39 @@ Internet → mlapi.us (192.168.1.196) → nginx proxy → 192.168.1.77:3001 → 
 - **Static Assets**: Available at root paths (`/static/`, `/onnx/`, `/models/`)
 
 ## Latest Features (2025-09-28)
+
+### 🆕 Card Extraction Feature (NEW)
+- **Multi-Card Extraction**: ✅ Capture button now extracts all detected cards from the image
+- **Individual Card Views**: ✅ New extraction view displays cropped card sections in a grid
+- **Card Analysis Interface**: ✅ Click any card for detailed view with zoom controls (50%-400%)
+- **Batch Download**: ✅ Download individual cards or all cards at once as PNG files
+- **Smart Filtering**: ✅ Only extracts cards above confidence threshold with validation
+- **Navigation**: ✅ Seamless navigation between camera view and extraction view
+- **State Management**: ✅ Redux-based state management for extraction sessions and history
+- **Progress Tracking**: ✅ Real-time progress updates during card extraction process
+- **Flexible Positioning**: ✅ Cards can be detected anywhere in the frame (no centering required)
+- **Relaxed Capture Requirements**: ✅ Lowered quality thresholds for easier capture (0.6 → 0.25)
+- **Capture in Positioned State**: ✅ Button now works in both "positioned" and "ready" states
+
+### Technical Implementation
+- **CardCropper Utility**: Handles both axis-aligned and rotated bounding box extraction
+- **CardExtractionView Component**: Grid and detail views with responsive design
+- **Redux Integration**: New cardExtractionSlice for managing extracted card state
+- **Image Processing**: Canvas-based cropping with padding and quality validation
+- **TypeScript Support**: Fully typed components and utilities
+
+## Repository Cleanup (2025-09-28)
+- **Removed Files**: ✅ Cleaned up unnecessary files and directories
+  - Duplicate/old model files (trading_card_detector_alt.onnx, trading_card_detector_nms.onnx)
+  - Old experiment results (outputs/v14, v15, v16 directories)
+  - Python cache files (__pycache__ directories)
+  - Inference test files and temporary outputs
+  - Unused debugging scripts (alternative_onnx_export.py, test_version_combinations.py)
+  - Sample training images and cache files
+  - Default Create React App README
+  - Empty directories and temporary files
+
+## Latest Features (2025-09-28)
 - **Docker Deployment**: ✅ Production-ready containerized frontend
   - Multi-stage Docker build (Node.js build + nginx serve)
   - Optimized nginx configuration with security headers

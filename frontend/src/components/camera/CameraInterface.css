@@ -93,6 +93,9 @@
 .capture-button.positioned {
   border-color: #2196F3;
   background: rgba(33, 150, 243, 0.3);
+  opacity: 1 !important;
+  cursor: pointer !important;
+  transform: scale(1) !important;
 }
 
 .capture-button.processing {
