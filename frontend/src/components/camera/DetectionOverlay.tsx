@@ -146,9 +146,8 @@ function drawDetection(
       y: corner.y * scaleY
     }));
     
-    // DEBUG: Test if camera is horizontally mirrored
-    // If boxes appear on wrong side, uncomment this line:
-    // canvasCorners.forEach(corner => { corner.x = ctx.canvas.width - corner.x; });
+    // FIX: Camera is horizontally mirrored - flip X coordinates
+    canvasCorners.forEach(corner => { corner.x = ctx.canvas.width - corner.x; });
     
     // Draw rotated bounding box using corner points
     drawRotatedBoundingBox(ctx, canvasCorners, fillColor, strokeColor);
@@ -171,9 +170,8 @@ function drawDetection(
     const canvasBoxWidth = boundingBox.width * scaleX;
     const canvasBoxHeight = boundingBox.height * scaleY;
     
-    // DEBUG: Test if camera is horizontally mirrored
-    // If boxes appear on wrong side, uncomment this line:
-    // canvasX = ctx.canvas.width - canvasX - canvasBoxWidth;
+    // FIX: Camera is horizontally mirrored - flip X coordinates
+    canvasX = ctx.canvas.width - canvasX - canvasBoxWidth;
     
     ctx.fillRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
     ctx.strokeRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
