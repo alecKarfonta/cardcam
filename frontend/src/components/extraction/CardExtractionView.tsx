@@ -1,28 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CardDetection } from '../../store/slices/inferenceSlice';
+import { ExtractedCard } from '../../store/slices/cardExtractionSlice';
+import { CardDetailsView } from './components/CardDetailsView';
 import './CardExtractionView.css';
-
-export interface ExtractedCard {
-  id: string;
-  imageData: ImageData;
-  originalDetection: CardDetection;
-  canvas?: HTMLCanvasElement;
-}
 
 interface CardExtractionViewProps {
   extractedCards: ExtractedCard[];
+  sourceImageDimensions?: { width: number; height: number };
   onBack: () => void;
   onCardSelect?: (card: ExtractedCard) => void;
+  onCardUpdate?: (updatedCard: ExtractedCard) => void;
 }
 
 export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
   extractedCards,
+  sourceImageDimensions,
   onBack,
-  onCardSelect
+  onCardSelect,
+  onCardUpdate
 }) => {
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.0);
+  const [viewMode, setViewMode] = useState<'grid' | 'details'>('grid');
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
 
   // Filter cards based on confidence threshold
@@ -34,28 +32,87 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
   useEffect(() => {
     if (selectedCardIndex !== null && selectedCardIndex >= filteredCards.length) {
       setSelectedCardIndex(null);
+      setViewMode('grid');
     }
   }, [filteredCards.length, selectedCardIndex]);
 
   // Render extracted cards to canvases
   useEffect(() => {
-    extractedCards.forEach((card, index) => {
-      const canvas = canvasRefs.current[index];
-      if (canvas && card.imageData) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.width = card.imageData.width;
-          canvas.height = card.imageData.height;
-          ctx.putImageData(card.imageData, 0, 0);
+    const renderCanvases = () => {
+      extractedCards.forEach((card, index) => {
+        const canvas = canvasRefs.current[index];
+        if (canvas && card.imageData) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            canvas.width = card.imageData.width;
+            canvas.height = card.imageData.height;
+            ctx.putImageData(card.imageData, 0, 0);
+          }
         }
-      }
-    });
-  }, [extractedCards]);
+      });
+    };
+
+    // Always render canvases, but with delay when returning to grid
+    if (viewMode === 'grid') {
+      // Use requestAnimationFrame for better timing when returning to grid
+      requestAnimationFrame(() => {
+        setTimeout(renderCanvases, 50); // Increased delay to ensure DOM is ready
+      });
+    } else {
+      renderCanvases();
+    }
+  }, [extractedCards, viewMode]);
+
+  // Force re-render grid canvases when returning to grid view
+  useEffect(() => {
+    if (viewMode === 'grid') {
+      console.log('🎨 Force re-rendering grid canvases');
+      // Additional effect to ensure grid canvases are rendered when switching back
+      const timer = setTimeout(() => {
+        let renderedCount = 0;
+        extractedCards.forEach((card, index) => {
+          const canvas = canvasRefs.current[index];
+          if (canvas && card.imageData) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              canvas.width = card.imageData.width;
+              canvas.height = card.imageData.height;
+              ctx.putImageData(card.imageData, 0, 0);
+              renderedCount++;
+            }
+          }
+        });
+        console.log(`✅ Rendered ${renderedCount}/${extractedCards.length} canvases`);
+      }, 100); // Longer delay to ensure all DOM updates are complete
+
+      return () => clearTimeout(timer);
+    }
+  }, [viewMode, extractedCards]);
 
   const handleCardClick = (index: number) => {
     setSelectedCardIndex(index);
+    setViewMode('details');
     if (onCardSelect) {
-      onCardSelect(extractedCards[index]);
+      onCardSelect(filteredCards[index]);
+    }
+  };
+
+  const handleBackToGrid = () => {
+    console.log('🔄 Switching back to grid view');
+    console.log('📊 Canvas refs status:', canvasRefs.current.map((ref, i) => ({ index: i, hasRef: !!ref, cardId: extractedCards[i]?.id })));
+    setSelectedCardIndex(null);
+    setViewMode('grid');
+  };
+
+  const handleNextCard = () => {
+    if (selectedCardIndex !== null && selectedCardIndex < filteredCards.length - 1) {
+      setSelectedCardIndex(selectedCardIndex + 1);
+    }
+  };
+
+  const handlePreviousCard = () => {
+    if (selectedCardIndex !== null && selectedCardIndex > 0) {
+      setSelectedCardIndex(selectedCardIndex - 1);
     }
   };
 
@@ -106,7 +163,19 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
           >
             <div className="card-preview">
               <canvas
-                ref={(el) => (canvasRefs.current[index] = el)}
+                ref={(el) => {
+                  const originalIndex = extractedCards.findIndex(c => c.id === card.id);
+                  canvasRefs.current[originalIndex] = el;
+                  // Immediately render if canvas and imageData are available
+                  if (el && card.imageData) {
+                    const ctx = el.getContext('2d');
+                    if (ctx) {
+                      el.width = card.imageData.width;
+                      el.height = card.imageData.height;
+                      ctx.putImageData(card.imageData, 0, 0);
+                    }
+                  }
+                }}
                 className="card-canvas"
               />
               <div className="card-overlay">
@@ -122,7 +191,7 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
                   className="download-card-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDownloadCard(card, index);
+                    handleDownloadCard(card, extractedCards.findIndex(c => c.id === card.id));
                   }}
                 >
                   ⬇
@@ -135,67 +204,22 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
     );
   };
 
-  const renderDetailView = () => {
-    if (selectedCardIndex === null) return null;
-    
+  // Show the enhanced card details view when a card is selected
+  if (viewMode === 'details' && selectedCardIndex !== null) {
     const selectedCard = filteredCards[selectedCardIndex];
-    
     return (
-      <div className="card-detail-view">
-        <div className="detail-header">
-          <button
-            className="back-to-grid-btn"
-            onClick={() => setSelectedCardIndex(null)}
-          >
-            ← Back to Grid
-          </button>
-          <div className="detail-info">
-            <span>Card {selectedCardIndex + 1} of {filteredCards.length}</span>
-            <span>Confidence: {(selectedCard.originalDetection.confidence * 100).toFixed(1)}%</span>
-          </div>
-        </div>
-        
-        <div className="detail-canvas-container">
-          <div 
-            className="detail-canvas-wrapper"
-            style={{ transform: `scale(${zoomLevel})` }}
-          >
-            <canvas
-              ref={(el) => (canvasRefs.current[selectedCardIndex] = el)}
-              className="detail-canvas"
-            />
-          </div>
-        </div>
-        
-        <div className="detail-controls">
-          <div className="zoom-controls">
-            <button
-              className="zoom-btn"
-              onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.25))}
-              disabled={zoomLevel <= 0.5}
-            >
-              -
-            </button>
-            <span className="zoom-level">{Math.round(zoomLevel * 100)}%</span>
-            <button
-              className="zoom-btn"
-              onClick={() => setZoomLevel(Math.min(4, zoomLevel + 0.25))}
-              disabled={zoomLevel >= 4}
-            >
-              +
-            </button>
-          </div>
-          
-          <button
-            className="download-btn"
-            onClick={() => handleDownloadCard(selectedCard, selectedCardIndex)}
-          >
-            Download Card
-          </button>
-        </div>
-      </div>
+      <CardDetailsView
+        card={selectedCard}
+        cardIndex={selectedCardIndex}
+        totalCards={filteredCards.length}
+        sourceImageDimensions={sourceImageDimensions}
+        onBack={handleBackToGrid}
+        onCardUpdate={onCardUpdate}
+        onNext={handleNextCard}
+        onPrevious={handlePreviousCard}
+      />
     );
-  };
+  }
 
   return (
     <div className="card-extraction-view">
@@ -226,7 +250,7 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
       </div>
 
       <div className="extraction-content">
-        {selectedCardIndex !== null ? renderDetailView() : renderCardGrid()}
+        {renderCardGrid()}
       </div>
     </div>
   );

@@ -1,0 +1,5 @@
+---
+description: cd /home/alec/git/pokemon && docker compose build frontend
+globs:
+alwaysApply: true
+---

@@ -450,9 +450,9 @@ def convert_yolo_to_onnx(model_path, output_dir, input_size=1088):
 
 def main():
     # Paths
-    model_path = "/home/alec/git/pokemon/src/training/trading_cards_obb/yolo11n_obb_v16/weights/best.pt"
+    model_path = "/home/alec/git/pokemon/src/training/trading_cards_obb/yolo11n_obb_v15/weights/best.pt"
     output_dir = "/home/alec/git/pokemon/frontend/public/models"
-    test_image_path = "/home/alec/git/pokemon/cam.png"
+    test_image_path = "/home/alec/git/pokemon/data/gold/images/20250927_104620.jpg"
     
     print("🚀 YOLO to ONNX Converter with Inference Testing")
     print("=" * 60)

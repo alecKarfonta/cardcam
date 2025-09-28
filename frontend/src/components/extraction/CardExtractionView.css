@@ -351,20 +351,28 @@
   .extraction-header {
     padding: 12px 16px;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 8px;
+    /* Add safe area padding */
+    padding-top: max(12px, env(safe-area-inset-top));
   }
   
   .extraction-title h2 {
     font-size: 16px;
+    /* Allow title to shrink */
+    min-width: 0;
   }
   
   .back-btn, .download-all-btn {
     padding: 6px 12px;
     font-size: 13px;
+    /* Prevent buttons from shrinking too much */
+    flex-shrink: 0;
   }
   
   .threshold-controls {
     min-width: 100px;
+    /* Allow controls to shrink on very small screens */
+    flex-shrink: 1;
   }
   
   .threshold-label {
@@ -391,6 +399,36 @@
   }
 }
 
+@media (max-width: 600px) {
+  .extraction-header {
+    /* Stack items vertically on smaller screens to prevent overlap */
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  
+  .extraction-title {
+    text-align: center;
+    order: 1;
+  }
+  
+  .back-btn {
+    order: 0;
+    align-self: flex-start;
+  }
+  
+  .threshold-controls {
+    order: 2;
+    align-self: center;
+    min-width: 150px;
+  }
+  
+  .download-all-btn {
+    order: 3;
+    align-self: flex-end;
+  }
+}
+
 @media (max-width: 480px) {
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -398,17 +436,24 @@
   }
   
   .extraction-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
+    padding: 10px 12px;
+    gap: 8px;
   }
   
-  .extraction-title {
-    text-align: center;
+  .back-btn, .download-all-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  
+  .extraction-title h2 {
+    font-size: 14px;
   }
   
   .threshold-controls {
-    align-self: center;
-    min-width: 150px;
+    min-width: 140px;
+  }
+  
+  .threshold-label {
+    font-size: 10px;
   }
 }

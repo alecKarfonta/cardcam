@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useAppSelector, useAppDispatch } from './hooks/redux';
-import { CameraInterface } from './components/camera/CameraInterface';
+import { CameraInterface, CameraInterfaceRef } from './components/camera/CameraInterface';
 import { CardExtractionView } from './components/extraction/CardExtractionView';
 import { setCurrentView } from './store/slices/appSlice';
 import { RootState } from './store';
@@ -10,6 +10,7 @@ function App() {
   const dispatch = useAppDispatch();
   const currentView = useAppSelector((state: RootState) => state.app.currentView);
   const extractionState = useAppSelector((state: RootState) => state.cardExtraction);
+  const cameraRef = useRef<CameraInterfaceRef>(null);
 
   const handleCapture = (imageData: ImageData) => {
     console.log('Card captured:', imageData);
@@ -23,6 +24,10 @@ function App() {
 
   const handleBackToCamera = () => {
     dispatch(setCurrentView('camera'));
+    // Resume the camera when returning from extraction view
+    if (cameraRef.current) {
+      cameraRef.current.resumeCamera();
+    }
   };
 
   const renderCurrentView = () => {
@@ -38,6 +43,7 @@ function App() {
       default:
         return (
           <CameraInterface 
+            ref={cameraRef}
             onCapture={handleCapture}
             onError={handleError}
           />

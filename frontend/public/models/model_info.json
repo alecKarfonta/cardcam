@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "format": "ONNX",
   "input_size": 1088,
-  "source_model": "/home/alec/git/pokemon/src/training/trading_cards_obb/yolo11n_obb_v16/weights/best.pt",
+  "source_model": "/home/alec/git/pokemon/src/training/trading_cards_obb/yolo11n_obb_v15/weights/best.pt",
   "classes": [
     "trading_card"
   ],

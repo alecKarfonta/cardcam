@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
 import { useCamera } from '../../hooks/useCamera';
 import { useInference } from '../../hooks/useInference';
 import { useAppDispatch } from '../../hooks/redux';
@@ -19,10 +19,14 @@ interface CameraInterfaceProps {
   onError?: (error: string) => void;
 }
 
-export const CameraInterface: React.FC<CameraInterfaceProps> = ({
+export interface CameraInterfaceRef {
+  resumeCamera: () => void;
+}
+
+export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfaceProps>(({
   onCapture,
   onError
-}) => {
+}, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectionSystemRef = useRef<CardDetectionSystem>(new CardDetectionSystem());
@@ -30,7 +34,10 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.8);
+  const [isCameraFrozen, setIsCameraFrozen] = useState(false);
+  const [frozenFrameData, setFrozenFrameData] = useState<ImageData | null>(null);
   const modelLoadedRef = useRef<boolean>(false);
+  const frozenCanvasRef = useRef<HTMLCanvasElement>(null);
   
   const dispatch = useAppDispatch();
 
@@ -195,6 +202,20 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     modelLoadedRef.current = modelState.isLoaded;
   }, [modelState]);
 
+  // Render frozen frame to canvas when captured
+  useEffect(() => {
+    if (frozenFrameData && frozenCanvasRef.current) {
+      const canvas = frozenCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        canvas.width = frozenFrameData.width;
+        canvas.height = frozenFrameData.height;
+        ctx.putImageData(frozenFrameData, 0, 0);
+      }
+    }
+  }, [frozenFrameData]);
+
   // Note: Confidence filtering is now done at render time in DetectionOverlay
 
   // Attach video element when available
@@ -223,12 +244,12 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
 
   const startFrameProcessing = () => {
     const processFrame = () => {
-      if (cameraState.status === 'streaming' && modelLoadedRef.current && !shouldSkipFrame()) {
+      if (cameraState.status === 'streaming' && modelLoadedRef.current && !shouldSkipFrame() && !isCameraFrozen) {
         captureAndAnalyzeFrame();
       }
       setFrameCount((c) => (c + 1) % 60);
       if (frameCount === 0) {
-        console.log('🎞️ Frame loop alive. Model loaded:', modelLoadedRef.current, 'Queue:', isInferenceProcessing);
+        console.log('🎞️ Frame loop alive. Model loaded:', modelLoadedRef.current, 'Queue:', isInferenceProcessing, 'Frozen:', isCameraFrozen);
       }
       requestAnimationFrame(processFrame);
     };
@@ -293,42 +314,36 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     
+    // Freeze the camera and capture the current frame
+    setIsCameraFrozen(true);
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    // Capture the current frame
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setFrozenFrameData(imageData);
+    
     // If no detections, still capture the frame but show a message
     if (!lastResult?.detections || lastResult.detections.length === 0) {
       console.log('No cards detected, but capturing frame anyway');
-      // Still capture the raw frame for manual inspection
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      if (ctx) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        if (onCapture) {
-          onCapture(imageData);
-        }
+      if (onCapture) {
+        onCapture(imageData);
       }
+      // Keep camera frozen to show the captured frame
       return;
     }
 
     setIsProcessing(true);
     
     try {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) throw new Error('Canvas context not available');
-
-      // Capture high-quality frame
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       // Filter detections by confidence threshold (use lower threshold for capture)
       const captureThreshold = Math.min(confidenceThreshold, 0.3); // Use at most 0.3 for capture
@@ -402,6 +417,17 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     }
   };
 
+  const resumeCamera = () => {
+    setIsCameraFrozen(false);
+    setFrozenFrameData(null);
+    setIsProcessing(false);
+  };
+
+  // Expose resumeCamera function to parent component
+  useImperativeHandle(ref, () => ({
+    resumeCamera
+  }));
+
   const handleCameraFlip = () => {
     // TODO: Implement camera flip functionality
     console.log('Camera flip requested');
@@ -456,12 +482,24 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
           autoPlay
           playsInline
           muted
+          style={{ display: isCameraFrozen ? 'none' : 'block' }}
         />
         
         <canvas
           ref={canvasRef}
           className="processing-canvas"
           style={{ display: 'none' }}
+        />
+        
+        <canvas
+          ref={frozenCanvasRef}
+          className="frozen-frame-canvas"
+          style={{ 
+            display: isCameraFrozen ? 'block' : 'none',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
         />
         
         <DetectionOverlay
@@ -471,29 +509,41 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
           className="detection-overlay"
           confidenceThreshold={confidenceThreshold}
         />
+        
+        {isCameraFrozen && isProcessing && (
+          <div className="processing-overlay">
+            <div className="processing-content">
+              <div className="loading-spinner large" />
+              <h3>Processing Frame</h3>
+              <p>Extracting cards from captured image...</p>
+            </div>
+          </div>
+        )}
+        
+        {isCameraFrozen && !isProcessing && (
+          <div className="frame-captured-overlay">
+            <div className="frame-captured-content">
+              <h3>Frame Captured</h3>
+              <p>Ready for processing</p>
+              <button onClick={resumeCamera} className="resume-camera-btn">
+                Resume Camera
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* lightweight debug status */}
-      <div style={{ position: 'absolute', left: 8, bottom: 8, padding: '6px 8px', background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 4, fontSize: 12, zIndex: 10 }}>
-        <div>Backbone Model: {modelState.isLoaded ? 'loaded' : (modelState.isLoading ? 'loading' : 'idle')}</div>
-        <div>JS NMS: {modelState.isLoaded ? 'active' : 'inactive'}</div>
+      <div className="debug-panel">
+        <div>Model: {modelState.isLoaded ? 'loaded' : (modelState.isLoading ? 'loading' : 'idle')}</div>
+        <div>NMS: {modelState.isLoaded ? 'active' : 'inactive'}</div>
         <div>Detections: {lastResult?.detections?.filter((d: any) => d.confidence >= confidenceThreshold).length ?? 0} / {lastResult?.detections?.length ?? 0}</div>
-        <div>State: {detectionState} | Quality: {detectionSystemRef.current.analyzeCardPositioning().quality.score.toFixed(2)}</div>
+        <div>State: {detectionState} | Q: {detectionSystemRef.current.analyzeCardPositioning().quality.score.toFixed(2)}</div>
         <button 
           onClick={captureDebugFrame}
           disabled={cameraState.status !== 'streaming' && cameraState.status !== 'processing'}
-          style={{ 
-            marginTop: 4, 
-            padding: '4px 8px', 
-            fontSize: 11, 
-            background: (cameraState.status === 'streaming' || cameraState.status === 'processing') ? '#007bff' : '#666',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 3,
-            cursor: (cameraState.status === 'streaming' || cameraState.status === 'processing') ? 'pointer' : 'not-allowed'
-          }}
         >
-          📸 Capture Debug Frames
+          📸 Debug
         </button>
       </div>
 
@@ -563,4 +613,4 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
       )}
     </div>
   );
-};
+});

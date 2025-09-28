@@ -32,6 +32,68 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
       const canvasWidth = videoRect.width;
       const canvasHeight = videoRect.height;
 
+      // Calculate the visible video area when using object-fit: cover
+      const videoNativeWidth = videoElement.videoWidth;
+      const videoNativeHeight = videoElement.videoHeight;
+      const videoNativeAspect = videoNativeWidth / videoNativeHeight;
+      const containerAspect = canvasWidth / canvasHeight;
+
+      let visibleVideoInfo = {
+        scaleX: canvasWidth / videoNativeWidth,
+        scaleY: canvasHeight / videoNativeHeight,
+        offsetX: 0,
+        offsetY: 0,
+        visibleWidth: videoNativeWidth,
+        visibleHeight: videoNativeHeight
+      };
+
+      // With object-fit: cover, the video is scaled to fill the container
+      // and cropped if aspect ratios don't match
+      if (videoNativeAspect > containerAspect) {
+        // Video is wider than container - crop horizontally
+        const scaleFactor = canvasHeight / videoNativeHeight;
+        const scaledVideoWidth = videoNativeWidth * scaleFactor;
+        const cropAmount = (scaledVideoWidth - canvasWidth) / 2;
+        
+        visibleVideoInfo = {
+          scaleX: scaleFactor,
+          scaleY: scaleFactor,
+          offsetX: cropAmount / scaleFactor, // Offset in native video coordinates
+          offsetY: 0,
+          visibleWidth: canvasWidth / scaleFactor, // Visible width in native coordinates
+          visibleHeight: videoNativeHeight
+        };
+      } else if (videoNativeAspect < containerAspect) {
+        // Video is taller than container - crop vertically
+        const scaleFactor = canvasWidth / videoNativeWidth;
+        const scaledVideoHeight = videoNativeHeight * scaleFactor;
+        const cropAmount = (scaledVideoHeight - canvasHeight) / 2;
+        
+        visibleVideoInfo = {
+          scaleX: scaleFactor,
+          scaleY: scaleFactor,
+          offsetX: 0,
+          offsetY: cropAmount / scaleFactor, // Offset in native video coordinates
+          visibleWidth: videoNativeWidth,
+          visibleHeight: canvasHeight / scaleFactor // Visible height in native coordinates
+        };
+      }
+
+      // Debug logging for scaling issues
+      console.log(`🔍 DetectionOverlay updateCanvasSize:`, {
+        videoNative: `${videoNativeWidth}x${videoNativeHeight}`,
+        videoRendered: `${canvasWidth.toFixed(1)}x${canvasHeight.toFixed(1)}`,
+        canvasBefore: `${canvas.width}x${canvas.height}`,
+        windowSize: `${window.innerWidth}x${window.innerHeight}`,
+        aspectRatios: `native:${videoNativeAspect.toFixed(2)} container:${containerAspect.toFixed(2)}`,
+        visibleArea: `${visibleVideoInfo.visibleWidth.toFixed(1)}x${visibleVideoInfo.visibleHeight.toFixed(1)}`,
+        offset: `${visibleVideoInfo.offsetX.toFixed(1)},${visibleVideoInfo.offsetY.toFixed(1)}`,
+        scale: `${visibleVideoInfo.scaleX.toFixed(3)}`
+      });
+
+      // Store visible video info for use in drawing functions
+      (canvas as any).visibleVideoInfo = visibleVideoInfo;
+
       // Set canvas size to match the rendered video size
       canvas.width = canvasWidth;
       canvas.height = canvasHeight;
@@ -60,7 +122,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
       // Draw filtered detections
       filteredDetections.forEach((detection, index) => {
-        drawDetection(ctx, detection, index === 0, quality, videoElement.videoWidth, videoElement.videoHeight);
+        drawDetection(ctx, detection, index === 0, quality, (canvas as any).visibleVideoInfo);
       });
 
       // Draw positioning guides if we have filtered detections
@@ -74,13 +136,36 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
     // Add resize listener to handle window resizing
     const handleResize = () => {
-      updateCanvasSize();
+      // Add a small delay to ensure video element has updated its size
+      setTimeout(() => {
+        updateCanvasSize();
+      }, 50);
     };
 
     window.addEventListener('resize', handleResize);
     
+    // Also use ResizeObserver for more reliable detection of video element size changes
+    let resizeObserver: ResizeObserver | null = null;
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === videoElement) {
+            console.log('🔍 Video element resized via ResizeObserver');
+            setTimeout(() => {
+              updateCanvasSize();
+            }, 10);
+            break;
+          }
+        }
+      });
+      resizeObserver.observe(videoElement);
+    }
+    
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [detections, quality, videoElement, confidenceThreshold]);
 
@@ -106,8 +191,7 @@ function drawDetection(
   detection: CardDetection,
   isPrimary: boolean,
   quality: DetectionQuality | undefined,
-  videoWidth: number,
-  videoHeight: number
+  visibleVideoInfo: any
 ): void {
   const { boundingBox, confidence, corners, isRotated } = detection;
 
@@ -145,20 +229,40 @@ function drawDetection(
     ctx.shadowBlur = 10;
   }
 
-  if (isRotated && corners && corners.length === 4) {
-    // Corners are already in image pixel coordinates from convertPredictionToDetections
-    // We need to scale them to canvas coordinates
-    // videoWidth/videoHeight are the video dimensions, ctx.canvas.width/height are the actual canvas size
-    const scaleX = ctx.canvas.width / videoWidth;
-    const scaleY = ctx.canvas.height / videoHeight;
+  // Check if detection is within the visible video area
+  const isDetectionVisible = (x: number, y: number, width: number, height: number) => {
+    return x + width > visibleVideoInfo.offsetX && 
+           x < visibleVideoInfo.offsetX + visibleVideoInfo.visibleWidth &&
+           y + height > visibleVideoInfo.offsetY && 
+           y < visibleVideoInfo.offsetY + visibleVideoInfo.visibleHeight;
+  };
+
+  // Transform coordinates from native video space to visible canvas space
+  const transformCoordinate = (x: number, y: number) => {
+    // Adjust for visible area offset
+    const adjustedX = x - visibleVideoInfo.offsetX;
+    const adjustedY = y - visibleVideoInfo.offsetY;
     
-    const canvasCorners = corners.map(corner => ({
-      x: corner.x * scaleX,
-      y: corner.y * scaleY
-    }));
+    // Scale to canvas coordinates
+    let canvasX = adjustedX * visibleVideoInfo.scaleX;
+    const canvasY = adjustedY * visibleVideoInfo.scaleY;
     
     // FIX: Camera is horizontally mirrored - flip X coordinates
-    canvasCorners.forEach(corner => { corner.x = ctx.canvas.width - corner.x; });
+    canvasX = ctx.canvas.width - canvasX;
+    
+    return { x: canvasX, y: canvasY };
+  };
+
+  if (isRotated && corners && corners.length === 4) {
+    // Check if any corner is visible
+    const visibleCorners = corners.filter(corner => 
+      isDetectionVisible(corner.x, corner.y, 0, 0)
+    );
+    
+    if (visibleCorners.length === 0) return; // Skip if completely outside visible area
+    
+    // Transform corners to canvas coordinates
+    const canvasCorners = corners.map(corner => transformCoordinate(corner.x, corner.y));
     
     // Draw rotated bounding box using corner points
     drawRotatedBoundingBox(ctx, canvasCorners, fillColor, strokeColor);
@@ -171,18 +275,19 @@ function drawDetection(
       drawConfidenceLabel(ctx, canvasCorners[0].x, canvasCorners[0].y, confidence, strokeColor);
     }
   } else {
-    // Bounding box coordinates are already in image pixel coordinates from convertPredictionToDetections
-    // Scale them to canvas coordinates
-    const scaleX = ctx.canvas.width / videoWidth;
-    const scaleY = ctx.canvas.height / videoHeight;
+    // Check if bounding box is visible
+    if (!isDetectionVisible(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height)) {
+      return; // Skip if completely outside visible area
+    }
     
-    let canvasX = boundingBox.x * scaleX;
-    const canvasY = boundingBox.y * scaleY;
-    const canvasBoxWidth = boundingBox.width * scaleX;
-    const canvasBoxHeight = boundingBox.height * scaleY;
+    // Transform bounding box coordinates
+    const topLeft = transformCoordinate(boundingBox.x, boundingBox.y);
+    const bottomRight = transformCoordinate(boundingBox.x + boundingBox.width, boundingBox.y + boundingBox.height);
     
-    // FIX: Camera is horizontally mirrored - flip X coordinates
-    canvasX = ctx.canvas.width - canvasX - canvasBoxWidth;
+    const canvasX = Math.min(topLeft.x, bottomRight.x);
+    const canvasY = Math.min(topLeft.y, bottomRight.y);
+    const canvasBoxWidth = Math.abs(bottomRight.x - topLeft.x);
+    const canvasBoxHeight = Math.abs(bottomRight.y - topLeft.y);
     
     ctx.fillRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
     ctx.strokeRect(canvasX, canvasY, canvasBoxWidth, canvasBoxHeight);
