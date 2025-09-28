@@ -192,139 +192,103 @@ export class ModelManager {
     }
 
     const dims = (output as any).dims as number[] | undefined;
-    const features = dims && dims.length >= 3 ? dims[1] : 6;
-    const numAnchors = dims && dims.length >= 3 ? dims[2] : Math.floor(outputData.length / 6);
-    const expectedLength = numAnchors * features;
-
-    console.log('📊 Output data length:', outputData.length);
-    console.log(`📊 Expected length for ${numAnchors} anchors × ${features} features:`, expectedLength);
     console.log('📊 Output shape:', dims);
+    console.log('📊 Output data length:', outputData.length);
     console.log('📊 First 20 values:', Array.from(outputData.slice(0, 20)));
 
-    const [, , targetHeight, targetWidth] = this.config.inputShape; // [1,3,640,640]
+    // New format: [1, 300, 7] where each detection is [cx, cy, w, h, conf, class, angle]
+    // NMS is already applied in the ONNX model
+    if (!dims || dims.length !== 3 || dims[2] !== 7) {
+      throw new Error(`Unexpected output format. Expected [1, 300, 7], got ${dims}`);
+    }
 
+    const [, maxDetections, featuresPerDetection] = dims;
     const boxes: number[] = [];
     const scores: number[] = [];
     const classes: number[] = [];
     const rotatedBoxesAll: number[] = [];
 
-    // helper: sigmoid
-    const sigmoid = (v: number) => 1 / (1 + Math.exp(-v));
+    console.log(`🎯 Processing ${maxDetections} detections with NMS already applied`);
 
-      if (features === 6) {
-        // OBB model outputs: [cx, cy, w, h, angle, conf] - coordinates already in pixel space
-        const chStride = numAnchors; // per-channel span
-        const cxRaw = outputData.subarray(0 * chStride, 1 * chStride);
-        const cyRaw = outputData.subarray(1 * chStride, 2 * chStride);
-        const wRaw  = outputData.subarray(2 * chStride, 3 * chStride);
-        const hRaw  = outputData.subarray(3 * chStride, 4 * chStride);
-        const thRaw = outputData.subarray(4 * chStride, 5 * chStride);
-        const scRaw = outputData.subarray(5 * chStride, 6 * chStride);
-
-        console.log(`🔧 OBB decode for ${targetWidth}x${targetWidth}, ${numAnchors} anchors`);
-        console.log(`📊 Raw ranges: cx[${cxRaw[0]?.toFixed(2)}-${Array.from(cxRaw).reduce((a,b) => Math.max(a,b), -Infinity).toFixed(2)}], cy[${cyRaw[0]?.toFixed(2)}-${Array.from(cyRaw).reduce((a,b) => Math.max(a,b), -Infinity).toFixed(2)}], conf[${Array.from(scRaw).reduce((a,b) => Math.min(a,b), Infinity).toFixed(6)}-${Array.from(scRaw).reduce((a,b) => Math.max(a,b), -Infinity).toFixed(6)}]`);
-        
-        for (let i = 0; i < numAnchors; i++) {
-          // Coordinates are in pixel space relative to model input (1088x1088)
-          const cx = cxRaw[i];
-          const cy = cyRaw[i];
-          const ww = wRaw[i];
-          const hh = hRaw[i];
-          const th = thRaw[i]; // Angle in radians
-          const score = sigmoid(scRaw[i]); // Apply sigmoid to confidence
-          
-          if (score <= this.config.confidenceThreshold) continue;
-
-          // Create rotated corners in letterbox space
-          const halfW = ww / 2;
-          const halfH = hh / 2;
-          const cosT = Math.cos(th);
-          const sinT = Math.sin(th);
-          const rel = [
-            [-halfW, -halfH],
-            [ halfW, -halfH],
-            [ halfW,  halfH],
-            [-halfW,  halfH],
-          ];
-          const corners = rel.map(([rx, ry]) => ({
-            x: cx + rx * cosT - ry * sinT,
-            y: cy + rx * sinT + ry * cosT,
-          }));
-          
-          // Map back from letterbox to original image then normalize
-          const unpad = corners.map(p => ({
-            x: (p.x - this.lastPadX) / this.lastScale,
-            y: (p.y - this.lastPadY) / this.lastScale,
-          }));
-          const norm = unpad.map(p => ({
-            x: Math.max(0, Math.min(1, p.x / this.lastOrigW)),
-            y: Math.max(0, Math.min(1, p.y / this.lastOrigH)),
-          }));
-          
-          // Calculate AABB for NMS
-          const xs = norm.map(p => p.x);
-          const ys = norm.map(p => p.y);
-          const minX = Math.max(0, Math.min(...xs));
-          const maxX = Math.min(1, Math.max(...xs));
-          const minY = Math.max(0, Math.min(...ys));
-          const maxY = Math.min(1, Math.max(...ys));
-          const widthN  = Math.max(0, maxX - minX);
-          const heightN = Math.max(0, maxY - minY);
-          
-          // Filter tiny boxes and boxes outside image bounds
-          const minArea = 0.001;
-          if (widthN * heightN < minArea) continue;
-          if (minX >= 1 || maxX <= 0 || minY >= 1 || maxY <= 0) continue;
-
-          boxes.push(minX, minY, widthN, heightN);
-          scores.push(score);
-          classes.push(0);
-          rotatedBoxesAll.push(
-            norm[0].x, norm[0].y,
-            norm[1].x, norm[1].y,
-            norm[2].x, norm[2].y,
-            norm[3].x, norm[3].y,
-          );
-        }
-    } else {
-      // Fallback: treat as axis-aligned [cx,cy,w,h,obj,cls]
-      const idxCx = 0 * numAnchors;
-      const idxCy = 1 * numAnchors;
-      const idxW  = 2 * numAnchors;
-      const idxH  = 3 * numAnchors;
-      const idxObj= 4 * numAnchors;
-      const idxCls= 5 * numAnchors;
-
-      for (let i = 0; i < numAnchors; i++) {
-        const cx = outputData[idxCx + i];
-        const cy = outputData[idxCy + i];
-        const w  = outputData[idxW  + i];
-        const h  = outputData[idxH  + i];
-        const obj= sigmoid(outputData[idxObj+ i]);
-        const cls= sigmoid(outputData[idxCls+ i]);
-        const score = (obj || 0) * (cls || 0);
-        if (score <= this.config.confidenceThreshold) continue;
-
-          const xPix = (cx - w / 2 - this.lastPadX) / this.lastScale;
-          const yPix = (cy - h / 2 - this.lastPadY) / this.lastScale;
-          const wPix = w / this.lastScale;
-          const hPix = h / this.lastScale;
-          const x = Math.max(0, xPix / this.lastOrigW);
-          const y = Math.max(0, yPix / this.lastOrigH);
-          const widthN  = Math.min(1, Math.max(0, wPix / this.lastOrigW));
-          const heightN = Math.min(1, Math.max(0, hPix / this.lastOrigH));
-        const minArea = 0.001;
-        if (widthN * heightN < minArea) continue;
-
-        boxes.push(x, y, widthN, heightN);
-        scores.push(score);
-        classes.push(0);
-      }
+    // Process each detection: [cx, cy, w, h, conf, class, angle]
+    for (let i = 0; i < maxDetections; i++) {
+      const detectionOffset = i * featuresPerDetection;
+      
+      // Skip empty detections (all zeros)
+      const detection = outputData.slice(detectionOffset, detectionOffset + featuresPerDetection);
+      if (detection.every(val => val === 0)) continue;
+      
+      const cx = detection[0];
+      const cy = detection[1]; 
+      const w = detection[2];
+      const h = detection[3];
+      const confidence = detection[4];
+      const classId = detection[5];
+      const angle = detection[6];
+      
+      // Filter by confidence threshold
+      if (confidence <= this.config.confidenceThreshold) continue;
+      
+      console.log(`Detection ${i}: cx=${cx.toFixed(1)}, cy=${cy.toFixed(1)}, w=${w.toFixed(1)}, h=${h.toFixed(1)}, conf=${confidence.toFixed(3)}, angle=${angle.toFixed(3)}`);
+      
+      // Create rotated corners in letterbox space (coordinates are in pixel space relative to 1088x1088)
+      const halfW = w / 2;
+      const halfH = h / 2;
+      const cosT = Math.cos(angle);
+      const sinT = Math.sin(angle);
+      
+      const corners = [
+        { x: cx + (-halfW * cosT - (-halfH) * sinT), y: cy + (-halfW * sinT + (-halfH) * cosT) }, // top-left
+        { x: cx + (halfW * cosT - (-halfH) * sinT), y: cy + (halfW * sinT + (-halfH) * cosT) },   // top-right
+        { x: cx + (halfW * cosT - halfH * sinT), y: cy + (halfW * sinT + halfH * cosT) },         // bottom-right
+        { x: cx + (-halfW * cosT - halfH * sinT), y: cy + (-halfW * sinT + halfH * cosT) }        // bottom-left
+      ];
+      
+      // Map back from letterbox to original image coordinates
+      const originalCorners = corners.map(corner => ({
+        x: (corner.x - this.lastPadX) / this.lastScale,
+        y: (corner.y - this.lastPadY) / this.lastScale,
+      }));
+      
+      // Normalize to [0, 1] range
+      const normalizedCorners = originalCorners.map(corner => ({
+        x: Math.max(0, Math.min(1, corner.x / this.lastOrigW)),
+        y: Math.max(0, Math.min(1, corner.y / this.lastOrigH)),
+      }));
+      
+      // Calculate axis-aligned bounding box for compatibility
+      const xs = normalizedCorners.map(p => p.x);
+      const ys = normalizedCorners.map(p => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const widthN = maxX - minX;
+      const heightN = maxY - minY;
+      
+      // Filter tiny boxes and boxes outside image bounds
+      const minArea = 0.001;
+      if (widthN * heightN < minArea) continue;
+      if (minX >= 1 || maxX <= 0 || minY >= 1 || maxY <= 0) continue;
+      
+      // Store results
+      boxes.push(minX, minY, widthN, heightN);
+      scores.push(confidence);
+      classes.push(Math.round(classId));
+      
+      // Store rotated box corners
+      rotatedBoxesAll.push(
+        normalizedCorners[0].x, normalizedCorners[0].y,
+        normalizedCorners[1].x, normalizedCorners[1].y,
+        normalizedCorners[2].x, normalizedCorners[2].y,
+        normalizedCorners[3].x, normalizedCorners[3].y,
+      );
     }
 
-    console.log(`🎯 Post-processing: ${boxes.length / 4} boxes before NMS (conf > ${this.config.confidenceThreshold})`);
+    console.log(`🎯 Final results: ${boxes.length / 4} detections (NMS already applied in ONNX model)`);
+    
     if (boxes.length === 0) {
-      console.log('⚠️ No boxes passed confidence threshold');
+      console.log('⚠️ No detections passed confidence threshold');
       return {
         boxes: new Float32Array(0),
         scores: new Float32Array(0),
@@ -334,73 +298,20 @@ export class ModelManager {
       };
     }
 
-    // Show top detections for debugging
-    const topDetections = scores.map((score, i) => ({ score, i }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-    console.log('🔝 Top 5 detections:', topDetections.map(d => 
-      `score=${d.score.toFixed(3)}, box=[${boxes[d.i*4].toFixed(3)}, ${boxes[d.i*4+1].toFixed(3)}, ${boxes[d.i*4+2].toFixed(3)}, ${boxes[d.i*4+3].toFixed(3)}]`
+    // Show detections for debugging
+    console.log('🔝 Detections:', scores.map((score, i) => 
+      `score=${score.toFixed(3)}, box=[${boxes[i*4].toFixed(3)}, ${boxes[i*4+1].toFixed(3)}, ${boxes[i*4+2].toFixed(3)}, ${boxes[i*4+3].toFixed(3)}]`
     ));
 
-    // Keep top-K before NMS to reduce clutter
-    const topK = 50;
-    if (scores.length > topK) {
-      const idx = scores.map((s, i) => [s, i] as [number, number]).sort((a,b) => b[0]-a[0]).slice(0, topK).map(x => x[1]);
-      const newBoxes: number[] = [];
-      const newScores: number[] = [];
-      const newClasses: number[] = [];
-      for (const i of idx) {
-        newBoxes.push(...boxes.slice(i*4, i*4+4));
-        newScores.push(scores[i]);
-        newClasses.push(classes[i]);
-      }
-      boxes.length = 0; boxes.push(...newBoxes);
-      scores.length = 0; scores.push(...newScores);
-      classes.length = 0; classes.push(...newClasses);
-    }
+    console.log(`📊 Confidence scores:`, scores);
 
-    console.log(`📊 Detections above confidence threshold (${this.config.confidenceThreshold}): ${scores.length}`);
-    console.log('📊 Confidence scores:', scores.slice(0, 10));
-
-    // NMS on normalized axis-aligned boxes (approx for rotated)
-    const nmsResults = this.applyNMS(boxes, scores, classes, this.config.nmsThreshold);
-    console.log(`📊 Detections after NMS: ${nmsResults.scores.length}`);
-
-    // If we have rotated boxes, filter them by NMS keep set
-    let rotatedOut: number[] | undefined = undefined;
-    if (rotatedBoxesAll.length > 0) {
-      const kept: number[] = [];
-      // Build mapping by matching scores and AABBs in order; since we kept top-K and NMS sorted, use a tolerant match
-      const keepSet: number[] = [];
-      // Recompute original arrays for matching
-      const origBoxes = boxes;
-      const origScores = scores;
-      for (let i = 0; i < nmsResults.boxes.length / 4; i++) {
-        const kb = nmsResults.boxes.slice(i*4, i*4+4);
-        const ks = nmsResults.scores[i];
-        for (let j = 0; j < origScores.length; j++) {
-          if (keepSet.includes(j)) continue;
-          const ob = origBoxes.slice(j*4, j*4+4);
-          const os = origScores[j];
-          if (Math.abs(os - ks) < 1e-6 && Math.abs(ob[0]-kb[0])<1e-6 && Math.abs(ob[1]-kb[1])<1e-6) {
-            kept.push(j);
-            keepSet.push(j);
-            break;
-          }
-        }
-      }
-      rotatedOut = [];
-      for (const j of kept) {
-        rotatedOut.push(...rotatedBoxesAll.slice(j*8, j*8+8));
-      }
-    }
-
+    // Return results (no additional NMS needed since it's built into ONNX model)
     return {
-      boxes: new Float32Array(nmsResults.boxes),
-      rotatedBoxes: rotatedOut ? new Float32Array(rotatedOut) : undefined,
-      scores: new Float32Array(nmsResults.scores),
-      classes: new Int32Array(nmsResults.classes),
-      validDetections: nmsResults.boxes.length / 4
+      boxes: new Float32Array(boxes),
+      rotatedBoxes: rotatedBoxesAll.length > 0 ? new Float32Array(rotatedBoxesAll) : undefined,
+      scores: new Float32Array(scores),
+      classes: new Int32Array(classes),
+      validDetections: boxes.length / 4
     };
   }
 

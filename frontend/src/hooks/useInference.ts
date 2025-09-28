@@ -14,12 +14,12 @@ import {
 import { ModelManager, ModelConfig, ModelPrediction } from '../utils/ModelManager';
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
-  modelPath: `${process.env.PUBLIC_URL || ''}/models/trading_card_detector_1088_final.onnx`,
+  modelPath: `${process.env.PUBLIC_URL || ''}/models/trading_card_detector.onnx`,
   inputShape: [1, 3, 1088, 1088],
-  outputShape: [1, 6, 24276], // Raw YOLO OBB format: [cx,cy,w,h,theta,conf] per anchor
+  outputShape: [1, 300, 7], // NMS-enabled ONNX format: [cx,cy,w,h,conf,class,angle] per detection
   executionProviders: ['webgl', 'wasm', 'cpu'], // Try WebGL first for better performance
-  confidenceThreshold: 0.6, // Medium confidence to avoid noise but catch real detections
-  nmsThreshold: 0.3, // More aggressive NMS
+  confidenceThreshold: 0.25, // Lower threshold since NMS is already applied
+  nmsThreshold: 0.45, // Not used since NMS is built into ONNX model
 };
 
 export const useInference = () => {
