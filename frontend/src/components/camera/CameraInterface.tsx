@@ -614,3 +614,5 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
     </div>
   );
 });
+
+CameraInterface.displayName = 'CameraInterface';
