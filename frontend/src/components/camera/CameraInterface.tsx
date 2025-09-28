@@ -184,7 +184,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     modelLoadedRef.current = modelState.isLoaded;
   }, [modelState]);
 
-  // Note: NMS config is now built into the ONNX model, no need to update dynamically
+  // Note: Confidence filtering is now done at render time in DetectionOverlay
 
   // Attach video element when available
   useEffect(() => {
@@ -376,6 +376,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
           canvasWidth={videoRef.current?.videoWidth || 1920}
           canvasHeight={videoRef.current?.videoHeight || 1080}
           className="detection-overlay"
+          confidenceThreshold={confidenceThreshold}
         />
       </div>
 
@@ -383,7 +384,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
       <div style={{ position: 'absolute', left: 8, bottom: 8, padding: '6px 8px', background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 4, fontSize: 12, zIndex: 10 }}>
         <div>Backbone Model: {modelState.isLoaded ? 'loaded' : (modelState.isLoading ? 'loading' : 'idle')}</div>
         <div>JS NMS: {modelState.isLoaded ? 'active' : 'inactive'}</div>
-        <div>Detections: {lastResult?.detections?.length ?? 0}</div>
+        <div>Detections: {lastResult?.detections?.filter((d: any) => d.confidence >= confidenceThreshold).length ?? 0} / {lastResult?.detections?.length ?? 0}</div>
         <button 
           onClick={captureDebugFrame}
           disabled={cameraState.status !== 'streaming' && cameraState.status !== 'processing'}

@@ -51,6 +51,18 @@ services:
     volumes:
       - redis_data:/data
 
+  # React Frontend
+  frontend:
+    build: ./frontend
+    container_name: card-scanner-frontend
+    ports:
+      - "3001:80"
+    restart: unless-stopped
+    volumes:
+      - ./frontend/public/models:/usr/share/nginx/html/models
+    environment:
+      - NODE_ENV=production
+
   # CVAT for annotation (optional, can be started separately)
   cvat:
     image: openvino/cvat_server:latest

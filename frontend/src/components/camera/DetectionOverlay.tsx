@@ -8,6 +8,7 @@ interface DetectionOverlayProps {
   canvasWidth: number;
   canvasHeight: number;
   className?: string;
+  confidenceThreshold?: number;
 }
 
 export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
@@ -16,6 +17,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   canvasWidth,
   canvasHeight,
   className = 'detection-overlay',
+  confidenceThreshold = 0.0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -33,13 +35,16 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     // Clear canvas
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
+    // Filter detections by confidence threshold
+    const filteredDetections = detections.filter(detection => detection.confidence >= confidenceThreshold);
+
     // Debug canvas and detection info
-    if (detections.length > 0) {
-      console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} detections`);
+    if (filteredDetections.length > 0) {
+      console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} total detections, ${filteredDetections.length} after confidence filter (>=${confidenceThreshold})`);
       console.log(`🖼️ Actual canvas element size: ${canvas.width}x${canvas.height}`);
       console.log(`🖼️ Scale factors: scaleX=${(canvas.width / canvasWidth).toFixed(3)}, scaleY=${(canvas.height / canvasHeight).toFixed(3)}`);
       
-      detections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
+      filteredDetections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
         console.log(`  Detection ${index}:`, {
           boundingBox: `x:${detection.boundingBox.x.toFixed(1)}, y:${detection.boundingBox.y.toFixed(1)}, w:${detection.boundingBox.width.toFixed(1)}, h:${detection.boundingBox.height.toFixed(1)}`,
           corners: detection.corners ? detection.corners.map((c, i) => `C${i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ') : 'none',
@@ -62,16 +67,16 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
       });
     }
 
-    // Draw detections
-    detections.forEach((detection, index) => {
+    // Draw filtered detections
+    filteredDetections.forEach((detection, index) => {
       drawDetection(ctx, detection, index === 0, quality, canvasWidth, canvasHeight);
     });
 
-    // Draw positioning guides if we have detections
-    if (detections.length > 0) {
+    // Draw positioning guides if we have filtered detections
+    if (filteredDetections.length > 0) {
       drawPositioningGuides(ctx, canvasWidth, canvasHeight, quality);
     }
-  }, [detections, quality, canvasWidth, canvasHeight]);
+  }, [detections, quality, canvasWidth, canvasHeight, confidenceThreshold]);
 
   return (
     <canvas

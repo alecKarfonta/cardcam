@@ -108,15 +108,67 @@
 - **Workaround**: Export backbone + use existing JavaScript NMS pipeline
 
 ## Status
-- **Development Server**: ✅ Running on http://localhost:3002/cardcam
+- **Production Server**: ✅ Running in Docker on http://localhost:3001
+- **Container**: ✅ card-scanner-frontend (nginx + React build)
 - **Model Configuration**: ✅ Using trading_card_detector_backbone_opset18.onnx (COMPLETE OBB)
 - **ONNX Runtime**: ✅ Version 1.23.0 with opset 18 support
-- **Debug Tool**: ✅ Available at http://localhost:3002/debug_onnx.html
+- **Debug Tool**: ✅ Available at http://localhost:3001/debug_onnx.html
 - **Root Cause**: RESOLVED - Now have complete OBB pipeline with modern opset
 
+## Network Architecture
+
+### Connection Flow
+```
+Internet → mlapi.us (192.168.1.196) → nginx proxy → 192.168.1.77:3001 → Docker container
+```
+
+### External Nginx Proxy (192.168.1.196)
+- **Domain**: mlapi.us (SSL with Let's Encrypt)
+- **Proxy Rules**:
+  - `/cardcam/static/` → `http://192.168.1.77:3001/static/`
+  - `/cardcam/onnx/` → `http://192.168.1.77:3001/onnx/`
+  - `/cardcam/models/` → `http://192.168.1.77:3001/models/`
+  - `/cardcam/` → `http://192.168.1.77:3001/cardcam/`
+
+### Local Docker Container (192.168.1.77:3001)
+- **Container**: card-scanner-frontend
+- **Nginx Config**: Serves React app at `/cardcam/` with WebAssembly support
+- **Static Assets**: Available at root paths (`/static/`, `/onnx/`, `/models/`)
+
 ## Latest Features (2025-09-28)
+- **Docker Deployment**: ✅ Production-ready containerized frontend
+  - Multi-stage Docker build (Node.js build + nginx serve)
+  - Optimized nginx configuration with security headers
+  - ONNX model file serving with proper CORS headers
+  - WebAssembly support with 'unsafe-eval' CSP directive
+  - Running on port 3001 via docker-compose
+  - Production build with gzip compression
+
 - **Confidence Slider**: ✅ Added dynamic confidence threshold filter
   - Real-time adjustment from 0% to 100% (step: 5%)
-  - Updates NMS processor configuration on-the-fly
+  - Client-side filtering in DetectionOverlay component
+  - Shows filtered count vs total count in debug status
   - Styled to match camera interface design
   - Mobile-responsive with touch-friendly controls
+  - Works with any inference backend (no model changes needed)
+
+## Troubleshooting
+
+### WebAssembly CSP Issues
+If you see `WebAssembly.instantiate(): Refused to compile` errors:
+
+**External Nginx Proxy CSP** (192.168.1.196) must include:
+```nginx
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: ws:; media-src 'self'; object-src 'none'; frame-ancestors 'self'; worker-src 'self' blob:; child-src 'self' blob:;" always;
+```
+
+**Required CSP Directives for ONNX Runtime:**
+- `'unsafe-eval'` - Required for WebAssembly compilation
+- `worker-src 'self' blob:` - For Web Workers used by ONNX Runtime
+- `child-src 'self' blob:` - For child contexts
+
+### Model Loading Issues
+1. Check network tab for 404s on `/cardcam/models/` paths
+2. Verify external nginx proxy routes are correct
+3. Check console for CSP violations
+4. Test direct access: `http://192.168.1.77:3001/models/trading_card_detector.onnx`
