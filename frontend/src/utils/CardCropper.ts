@@ -7,7 +7,7 @@ export interface CropResult {
 }
 
 export class CardCropper {
-  private static readonly PADDING_RATIO = 0.05; // 5% padding around detected card
+  private static readonly PADDING_RATIO = 0.1; // 10% padding around detected card for better extraction
   private static readonly MIN_CARD_SIZE = 50; // Minimum card size in pixels
   private static readonly MAX_CARD_SIZE = 2000; // Maximum card size in pixels
 
@@ -65,22 +65,35 @@ export class CardCropper {
     }));
 
     // Calculate the bounding rectangle of the rotated card
-    const minX = Math.max(0, Math.min(...corners.map(c => c.x)));
-    const maxX = Math.min(sourceImageData.width - 1, Math.max(...corners.map(c => c.x)));
-    const minY = Math.max(0, Math.min(...corners.map(c => c.y)));
-    const maxY = Math.min(sourceImageData.height - 1, Math.max(...corners.map(c => c.y)));
+    const minX = Math.min(...corners.map(c => c.x));
+    const maxX = Math.max(...corners.map(c => c.x));
+    const minY = Math.min(...corners.map(c => c.y));
+    const maxY = Math.max(...corners.map(c => c.y));
 
-    const width = maxX - minX + 1;
-    const height = maxY - minY + 1;
+    const originalWidth = maxX - minX + 1;
+    const originalHeight = maxY - minY + 1;
 
-    if (width < this.MIN_CARD_SIZE || height < this.MIN_CARD_SIZE) {
-      console.warn('Card too small to extract:', width, 'x', height);
+    // Add padding while respecting image boundaries
+    const paddingX = Math.round(originalWidth * this.PADDING_RATIO);
+    const paddingY = Math.round(originalHeight * this.PADDING_RATIO);
+
+    // Calculate padded coordinates, ensuring we stay within image bounds
+    const paddedMinX = Math.max(0, minX - paddingX);
+    const paddedMaxX = Math.min(sourceImageData.width - 1, maxX + paddingX);
+    const paddedMinY = Math.max(0, minY - paddingY);
+    const paddedMaxY = Math.min(sourceImageData.height - 1, maxY + paddingY);
+
+    const paddedWidth = paddedMaxX - paddedMinX + 1;
+    const paddedHeight = paddedMaxY - paddedMinY + 1;
+
+    if (paddedWidth < this.MIN_CARD_SIZE || paddedHeight < this.MIN_CARD_SIZE) {
+      console.warn('Card too small to extract:', paddedWidth, 'x', paddedHeight);
       return null;
     }
 
-    // For now, extract the bounding rectangle
+    // For now, extract the bounding rectangle with padding
     // TODO: Implement proper perspective correction for rotated cards
-    return this.cropRectangle(sourceImageData, minX, minY, width, height);
+    return this.cropRectangle(sourceImageData, paddedMinX, paddedMinY, paddedWidth, paddedHeight);
   }
 
   /**
@@ -111,27 +124,75 @@ export class CardCropper {
       height = Math.round(height);
     }
 
-    // Add padding
+    // Calculate padding amounts
     const paddingX = Math.round(width * this.PADDING_RATIO);
     const paddingY = Math.round(height * this.PADDING_RATIO);
 
-    x = Math.max(0, x - paddingX);
-    y = Math.max(0, y - paddingY);
-    width = Math.min(sourceImageData.width - x, width + 2 * paddingX);
-    height = Math.min(sourceImageData.height - y, height + 2 * paddingY);
+    // Calculate desired padded coordinates
+    const desiredX = x - paddingX;
+    const desiredY = y - paddingY;
+    const desiredWidth = width + 2 * paddingX;
+    const desiredHeight = height + 2 * paddingY;
+
+    // Clamp to image boundaries while preserving as much padding as possible
+    const finalX = Math.max(0, desiredX);
+    const finalY = Math.max(0, desiredY);
+    const maxWidth = sourceImageData.width - finalX;
+    const maxHeight = sourceImageData.height - finalY;
+    const finalWidth = Math.min(desiredWidth, maxWidth);
+    const finalHeight = Math.min(desiredHeight, maxHeight);
+
+    // If we're at the left/top edge, try to extend right/down to maintain padding
+    const actualWidth = Math.min(finalWidth, sourceImageData.width - finalX);
+    const actualHeight = Math.min(finalHeight, sourceImageData.height - finalY);
 
     // Validate dimensions
-    if (width < this.MIN_CARD_SIZE || height < this.MIN_CARD_SIZE) {
-      console.warn('Card too small to extract:', width, 'x', height);
+    if (actualWidth < this.MIN_CARD_SIZE || actualHeight < this.MIN_CARD_SIZE) {
+      console.warn('Card too small to extract:', actualWidth, 'x', actualHeight);
       return null;
     }
 
-    if (width > this.MAX_CARD_SIZE || height > this.MAX_CARD_SIZE) {
-      console.warn('Card too large, might be false detection:', width, 'x', height);
+    if (actualWidth > this.MAX_CARD_SIZE || actualHeight > this.MAX_CARD_SIZE) {
+      console.warn('Card too large, might be false detection:', actualWidth, 'x', actualHeight);
       return null;
     }
 
-    return this.cropRectangle(sourceImageData, x, y, width, height);
+    return this.cropRectangle(sourceImageData, finalX, finalY, actualWidth, actualHeight);
+  }
+
+  /**
+   * Calculate padded coordinates that respect image boundaries
+   */
+  private static calculatePaddedBounds(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    paddingRatio: number,
+    imageWidth: number,
+    imageHeight: number
+  ): { x: number; y: number; width: number; height: number } {
+    const paddingX = Math.round(width * paddingRatio);
+    const paddingY = Math.round(height * paddingRatio);
+
+    // Calculate desired padded coordinates
+    const desiredX = x - paddingX;
+    const desiredY = y - paddingY;
+    const desiredWidth = width + 2 * paddingX;
+    const desiredHeight = height + 2 * paddingY;
+
+    // Clamp to image boundaries
+    const finalX = Math.max(0, desiredX);
+    const finalY = Math.max(0, desiredY);
+    const finalWidth = Math.min(desiredWidth, imageWidth - finalX);
+    const finalHeight = Math.min(desiredHeight, imageHeight - finalY);
+
+    return {
+      x: finalX,
+      y: finalY,
+      width: finalWidth,
+      height: finalHeight
+    };
   }
 
   /**

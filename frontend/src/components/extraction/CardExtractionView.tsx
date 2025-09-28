@@ -22,7 +22,20 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
 }) => {
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.0);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+
+  // Filter cards based on confidence threshold
+  const filteredCards = extractedCards.filter(
+    card => card.originalDetection.confidence >= confidenceThreshold
+  );
+
+  // Reset selected card index if it's no longer valid after filtering
+  useEffect(() => {
+    if (selectedCardIndex !== null && selectedCardIndex >= filteredCards.length) {
+      setSelectedCardIndex(null);
+    }
+  }, [filteredCards.length, selectedCardIndex]);
 
   // Render extracted cards to canvases
   useEffect(() => {
@@ -74,9 +87,18 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
   };
 
   const renderCardGrid = () => {
+    if (filteredCards.length === 0) {
+      return (
+        <div className="no-cards-message">
+          <p>No cards match the current confidence threshold ({(confidenceThreshold * 100).toFixed(0)}%)</p>
+          <p>Try lowering the threshold to see more cards.</p>
+        </div>
+      );
+    }
+
     return (
       <div className="card-grid">
-        {extractedCards.map((card, index) => (
+        {filteredCards.map((card, index) => (
           <div
             key={card.id}
             className={`card-item ${selectedCardIndex === index ? 'selected' : ''}`}
@@ -116,7 +138,7 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
   const renderDetailView = () => {
     if (selectedCardIndex === null) return null;
     
-    const selectedCard = extractedCards[selectedCardIndex];
+    const selectedCard = filteredCards[selectedCardIndex];
     
     return (
       <div className="card-detail-view">
@@ -128,7 +150,7 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
             ← Back to Grid
           </button>
           <div className="detail-info">
-            <span>Card {selectedCardIndex + 1} of {extractedCards.length}</span>
+            <span>Card {selectedCardIndex + 1} of {filteredCards.length}</span>
             <span>Confidence: {(selectedCard.originalDetection.confidence * 100).toFixed(1)}%</span>
           </div>
         </div>
@@ -182,7 +204,21 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
           ← Back to Camera
         </button>
         <div className="extraction-title">
-          <h2>Extracted Cards ({extractedCards.length})</h2>
+          <h2>Extracted Cards ({filteredCards.length}/{extractedCards.length})</h2>
+        </div>
+        <div className="threshold-controls">
+          <label className="threshold-label">
+            Confidence: {(confidenceThreshold * 100).toFixed(0)}%
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={confidenceThreshold}
+            onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+            className="threshold-slider"
+          />
         </div>
         <button className="download-all-btn" onClick={handleDownloadAll}>
           Download All
