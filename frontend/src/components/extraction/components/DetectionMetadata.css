@@ -205,3 +205,117 @@
 .detection-metadata::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Validation Results Styles */
+.validation-status.valid {
+  color: #4CAF50 !important;
+  font-weight: bold;
+}
+
+.validation-status.invalid {
+  color: #F44336 !important;
+  font-weight: bold;
+}
+
+.validation-metrics {
+  margin-top: 16px;
+}
+
+.validation-metrics h5 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.metric-item label {
+  font-weight: 500;
+  color: #555;
+}
+
+.metric-pass {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.metric-fail {
+  color: #F44336;
+  font-weight: 600;
+}
+
+.metric-detail {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: normal;
+}
+
+.validation-recommendations {
+  margin-top: 16px;
+}
+
+.validation-recommendations h5 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.recommendations-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recommendation-item {
+  padding: 8px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: #856404;
+  line-height: 1.4;
+}
+
+.recommendation-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Mobile responsiveness for validation */
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  
+  .metric-item {
+    padding: 4px 6px;
+    font-size: 0.8rem;
+  }
+  
+  .validation-recommendations h5,
+  .validation-metrics h5 {
+    font-size: 0.85rem;
+  }
+  
+  .recommendation-item {
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+}

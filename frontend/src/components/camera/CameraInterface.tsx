@@ -4,10 +4,9 @@ import { useInference } from '../../hooks/useInference';
 import { useAppDispatch } from '../../hooks/redux';
 import { DetectionOverlay } from './DetectionOverlay';
 import { CardDetectionSystem } from '../../utils/CardDetectionSystem';
-import { CardCropper } from '../../utils/CardCropper';
 import { EnhancedCardCropper } from '../../utils/EnhancedCardCropper';
-import { MultiFrameCapture, MultiFrameCaptureResult } from '../../utils/MultiFrameCapture';
-import { DetectionFusion, FusedDetection } from '../../utils/DetectionFusion';
+import { FrameAugmentation, AugmentationResult } from '../../utils/FrameAugmentation';
+import { PostProcessValidator } from '../../utils/PostProcessValidator';
 import { setCurrentView } from '../../store/slices/appSlice';
 import { 
   startExtraction, 
@@ -35,15 +34,13 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
   const detectionSystemRef = useRef<CardDetectionSystem>(new CardDetectionSystem());
   const [detectionState, setDetectionState] = useState<'searching' | 'detected' | 'positioned' | 'ready'>('searching');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [frameCount, setFrameCount] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.8);
   const [isCameraFrozen, setIsCameraFrozen] = useState(false);
   const [frozenFrameData, setFrozenFrameData] = useState<ImageData | null>(null);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [extractionProgress, setExtractionProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
-  const [multiFrameCapture, setMultiFrameCapture] = useState<MultiFrameCaptureResult | null>(null);
-  const [fusedDetections, setFusedDetections] = useState<FusedDetection[]>([]);
   const [isCapturingFrames, setIsCapturingFrames] = useState(false);
+  const [augmentationResult, setAugmentationResult] = useState<AugmentationResult | null>(null);
   const modelLoadedRef = useRef<boolean>(false);
   const isCapturingFramesRef = useRef<boolean>(false);
   const frozenCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,8 +61,7 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
     isProcessing: isInferenceProcessing,
     lastResult,
     loadModel,
-    runInference,
-    runBatchInference
+    runInference
   } = useInference();
 
   // Capture current frame with detections for debugging
@@ -320,18 +316,7 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
       if (shouldProcess) {
         captureAndAnalyzeFrame();
       }
-      
-      setFrameCount((c) => (c + 1) % 60);
-      if (frameCount === 0) {
-        console.log('🎞️ Frame loop alive. Model loaded:', modelLoadedRef.current, 'Queue:', isInferenceProcessing, 'Frozen:', isCameraFrozen, 'Capturing:', isCapturingFramesRef.current);
-      }
-      
-      // Log when live detection is blocked during capture
-      if (!shouldProcess && isCapturingFramesRef.current && frameCount % 30 === 0) {
-        console.log('🚫 Live detection BLOCKED - capture in progress');
-      }
-      
-      requestAnimationFrame(processFrame);
+        requestAnimationFrame(processFrame);
     };
     
     processFrame();
@@ -397,98 +382,93 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
     // Immediately stop live detection using ref for synchronous access
     isCapturingFramesRef.current = true;
     
-    // Freeze the camera and start instant multi-frame capture
+    // Freeze the camera and start single frame capture with minimal augmentation
     setIsCameraFrozen(true);
-    setIsCapturingFrames(true); // Also set state for UI consistency
-    setProcessingStep('Live detection stopped - capturing frames...');
+    setIsCapturingFrames(true);
+    setProcessingStep('Capturing frame...');
     setIsProcessing(true);
     
-    console.log('🛑 IMMEDIATELY stopped live detection for multi-frame capture');
-    console.log('👻 Detection overlay will be hidden during capture');
+    console.log('🛑 Stopped live detection for single frame capture');
     
-    // Much shorter delay since we're using ref for immediate state change
-    await new Promise(resolve => setTimeout(resolve, 16)); // Just one frame
-    
-    setProcessingStep('Instantly capturing 3 frames...');
+    // Yield to browser to allow UI updates
+    await new Promise(resolve => setTimeout(resolve, 0));
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
     try {
-      // Phase 1: Capture all frames instantly with NO delays
-      console.log('🚀 Starting INSTANT multi-frame capture...');
-      const captureResult = await MultiFrameCapture.captureFramesInstantWithValidation(video, {
-        frameCount: 3,
-        canvas: canvas,
-        maxAttempts: 2,
-        stabilityThreshold: 0.6 // More lenient since frames are captured instantly
-      });
+      // Phase 1: Capture single frame
+      console.log('📸 Capturing single frame...');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Failed to get canvas context');
+      }
       
-      setMultiFrameCapture(captureResult);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const capturedFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setFrozenFrameData(capturedFrame);
       
-      // Use middle frame for display immediately
-      const middleFrame = MultiFrameCapture.getMiddleFrame(captureResult);
-      setFrozenFrameData(middleFrame.imageData);
+      console.log(`✅ Frame captured: ${canvas.width}x${canvas.height}`);
       
-      console.log(`✅ All ${captureResult.frames.length} frames captured INSTANTLY in ${captureResult.captureDuration.toFixed(2)}ms`);
+      // Phase 2: Generate minimal augmented versions (just 2 slight variations)
+      setProcessingStep('Generating minimal augmentations...');
+      console.log('🎨 Generating minimal augmented versions...');
       
-      // Phase 2: Run inference on all captured frames (now that capture is complete)
-      setProcessingStep('Running inference on captured frames...');
-      console.log('🔍 Running batch inference on all captured frames...');
+      // Yield to browser before heavy processing
+      await new Promise(resolve => setTimeout(resolve, 0));
       
-      const frameImageData = MultiFrameCapture.getFrameImageData(captureResult);
-      const inferenceResults = await runBatchInference(frameImageData, (completed: number, total: number) => {
-        setProcessingStep(`Analyzing frame ${completed}/${total}...`);
-      });
+      const augmentResult = await FrameAugmentation.augmentFrame(
+        capturedFrame,
+        FrameAugmentation.createMinimalConfig(), // Use minimal settings
+        {
+          numAugmentations: 2, // Only 2 minimal augmentations
+          canvas: canvas
+        }
+      );
       
-      if (inferenceResults.length === 0) {
-        console.log('No inference results, but capturing frame anyway');
+      setAugmentationResult(augmentResult);
+      console.log(`✅ Generated ${augmentResult.augmentedFrames.length} minimal augmented frames in ${augmentResult.augmentationDuration.toFixed(2)}ms`);
+      
+      // Yield to browser after augmentation
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      // Phase 3: Run inference on original + minimal augmented frames
+      setProcessingStep('Running inference...');
+      console.log('🔍 Running inference on original + minimal augmented frames...');
+      
+      // Yield to browser before inference
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      const originalFrameImageData = [capturedFrame];
+      const augmentedFrameImageData = augmentResult.augmentedFrames.map(f => f.imageData);
+      const allFrameImageData = [...originalFrameImageData, ...augmentedFrameImageData];
+      
+      console.log(`📊 Total frames for inference: ${originalFrameImageData.length} original + ${augmentedFrameImageData.length} augmented = ${allFrameImageData.length}`);
+      
+      // Run inference on the captured frame
+      const inferenceResult = await runInference(capturedFrame);
+      
+      // Use the inference result for extraction
+      const originalResult = inferenceResult;
+      
+      console.log(`✅ Inference complete`);
+      
+      if (!originalResult || originalResult.detections.length === 0) {
+        console.log('No detections found');
         setProcessingStep('No cards detected');
         if (onCapture) {
-          onCapture(middleFrame.imageData);
+          onCapture(capturedFrame);
         }
         setIsProcessing(false);
         return;
       }
       
-      setProcessingStep('Fusing detection results...');
+      // Use the detections directly (no augmentation validation with useInference)
+      let validatedDetections = originalResult.detections;
       
-      // Fuse detection results from all frames with enhanced parameters
-      console.log('🔄 Fusing detection results with enhanced multi-frame analysis...');
-      const fusionResult = DetectionFusion.fuseDetections(inferenceResults, {
-        iouThreshold: 0.5,
-        minFrameCount: 1, // Allow detections from single frames
-        confidenceWeight: 0.7,
-        positionWeight: 0.3,
-        enableTemporalConsistency: true,
-        preserveSingleFrameDetections: true,
-        multiFrameBoostFactor: 0.15 // Increased confidence boost for multi-frame detections
-      });
-      
-      // Filter for high-quality detections with enhanced criteria
-      const highQualityDetections = DetectionFusion.filterHighQualityDetections(
-        fusionResult.fusedDetections,
-        {
-          minFrameCount: 1, // Allow single-frame detections
-          minAverageConfidence: 0.25,
-          maxConfidenceVariance: 0.4,
-          minTemporalConsistency: 0.3, // Require reasonable consistency for multi-frame
-          prioritizeMultiFrame: true // Sort multi-frame detections first
-        }
-      );
-      
-      setFusedDetections(highQualityDetections);
-      
-      // Enhanced fusion analysis and logging
-      const fusionAnalysis = DetectionFusion.analyzeFusionQuality(fusionResult);
-      console.log(`✅ Enhanced fusion complete: ${fusionResult.fusedDetections.length} total, ${highQualityDetections.length} high-quality`);
-      console.log(`📊 ${fusionAnalysis.summary}`);
-      if (fusionAnalysis.recommendations.length > 0) {
-        console.log(`💡 Recommendations:`, fusionAnalysis.recommendations);
-      }
-      
-      // Convert fused detections back to regular format for extraction
-      const finalDetections = DetectionFusion.convertToCardDetections(highQualityDetections);
+      const finalDetections = validatedDetections;
       
       // Filter detections by confidence threshold (use lower threshold for capture)
       const captureThreshold = Math.min(confidenceThreshold, 0.3);
@@ -508,17 +488,18 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
 
       // Set up progress tracking
       setExtractionProgress({current: 0, total: validDetections.length});
-      setProcessingStep(`Found ${validDetections.length} card${validDetections.length === 1 ? '' : 's'} (from ${fusionResult.fusedDetections.length} fused)`);
+      setProcessingStep(`Found ${validDetections.length} card${validDetections.length === 1 ? '' : 's'}`);
       
       // Small delay to show the detection count
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Start extraction process using middle frame
+      // Start extraction process using captured frame
       dispatch(startExtraction({
         sourceImageDimensions: {
-          width: middleFrame.imageData.width,
-          height: middleFrame.imageData.height
+          width: capturedFrame.width,
+          height: capturedFrame.height
         },
+        sourceImageData: capturedFrame, // Store original image for re-extraction
         totalDetections: validDetections.length
       }));
 
@@ -527,7 +508,7 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
 
       // Extract cards using high-resolution extraction with video element
       console.log('🎯 Starting high-resolution card extraction...');
-      console.log(`📐 Middle frame dimensions: ${middleFrame.imageData.width}x${middleFrame.imageData.height}`);
+      console.log(`📐 Captured frame dimensions: ${capturedFrame.width}x${capturedFrame.height}`);
       console.log(`🎥 Video ref available: ${!!videoRef.current}`);
       
       if (videoRef.current) {
@@ -539,11 +520,11 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
       }
       
       const cropResults = await EnhancedCardCropper.extractFromCameraFrame(
-        middleFrame.imageData,
+        capturedFrame,
         validDetections,
         videoRef.current || undefined,
         {
-          modelInputSize: { width: middleFrame.imageData.width, height: middleFrame.imageData.height },
+          modelInputSize: { width: capturedFrame.width, height: capturedFrame.height }, // Detection coordinates are normalized to original frame dimensions
           paddingRatio: 0.1, // 10% padding for better extraction (minimum 20px will be applied)
           enablePerspectiveCorrection: true
         }
@@ -554,26 +535,42 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
         console.log(`   Card ${index + 1}: ${result.extractedWidth}x${result.extractedHeight} (method: ${result.metadata.extractionMethod}, high-res: ${result.metadata.isHighResolution})`);
       });
       
+      // Initialize PostProcessValidator with BackboneModelManager
+      let postProcessValidator: PostProcessValidator | null = null;
+      // PostProcessValidator not available with useInference hook
+      console.log('⚠️ PostProcessValidator not available - using useInference hook');
+      
       for (let i = 0; i < cropResults.length; i++) {
         const cropResult = cropResults[i];
         const detection = validDetections[i];
         
+        // Yield to browser at the start of each card processing iteration
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
         // Update local progress state
         setExtractionProgress({current: i + 1, total: validDetections.length});
-        setProcessingStep(`Extracting card ${i + 1} of ${validDetections.length}...`);
+        setProcessingStep(`Processing card ${i + 1} of ${validDetections.length}...`);
         
         dispatch(updateExtractionProgress({
           current: i + 1,
-          status: `Extracting card ${i + 1} of ${validDetections.length}`
+          status: `Processing card ${i + 1} of ${validDetections.length}`
         }));
 
         // Get extraction quality metrics
         const qualityMetrics = EnhancedCardCropper.getExtractionQuality(cropResult);
         
+        // PostProcess validation step
+        let validationResult = null;
+        let finalConfidence = detection.confidence;
+        
+        
         const extractedCard = {
           id: `extracted_${Date.now()}_${i}`,
           imageData: cropResult.imageData,
-          originalDetection: detection,
+          originalDetection: {
+            ...detection,
+            confidence: finalConfidence // Use adjusted confidence
+          },
           extractedAt: Date.now(),
           dimensions: {
             width: cropResult.croppedWidth,
@@ -582,7 +579,9 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
           // Enhanced metadata from high-resolution extraction
           extractionMetadata: cropResult.metadata,
           qualityScore: qualityMetrics.score,
-          qualityFactors: qualityMetrics.factors
+          qualityFactors: qualityMetrics.factors,
+          // Add validation results to metadata
+          validationResult: validationResult || undefined
         };
 
         dispatch(addExtractedCard(extractedCard));
@@ -600,12 +599,12 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
 
       // Call original onCapture if provided
       if (onCapture) {
-        onCapture(middleFrame.imageData);
+        onCapture(capturedFrame);
       }
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Multi-frame capture failed';
-      console.error('Multi-frame capture error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Frame capture failed';
+      console.error('Frame capture error:', error);
       if (onError) {
         onError(errorMessage);
       }
@@ -614,7 +613,6 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
       setIsCapturingFrames(false); // Resume live detection
       isCapturingFramesRef.current = false; // Also reset ref
       console.log('▶️ Resuming live detection after capture...');
-      console.log('👁️ Detection overlay will be shown again');
     }
   };
 
@@ -624,12 +622,10 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
     setIsProcessing(false);
     setProcessingStep('');
     setExtractionProgress({current: 0, total: 0});
-    setMultiFrameCapture(null);
-    setFusedDetections([]);
+    setAugmentationResult(null); // Clear augmentation results
     setIsCapturingFrames(false); // Ensure live detection resumes
     isCapturingFramesRef.current = false; // Also reset ref
-    console.log('▶️ Resuming live detection after manual camera resume...');
-    console.log('👁️ Detection overlay will be shown again after manual resume');
+    console.log('▶️ Resuming live detection after camera resume...');
   };
 
   // Expose resumeCamera function to parent component
@@ -749,22 +745,14 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
         {isCameraFrozen && !isProcessing && (
           <div className="frame-captured-overlay">
             <div className="frame-captured-content">
-              <h3>Instant Multi-Frame Capture Complete</h3>
+              <h3>Frame Capture Complete</h3>
               <p className="capture-status">{processingStep || 'Ready for processing'}</p>
-              {multiFrameCapture && (
-                <p className="capture-info">
-                  {multiFrameCapture.frames.length} frames captured in {multiFrameCapture.captureDuration.toFixed(0)}ms
-                  {multiFrameCapture.frames.length > 1 && (
-                    <span> (avg: {(multiFrameCapture.captureDuration / (multiFrameCapture.frames.length - 1)).toFixed(0)}ms between frames)</span>
-                  )}
+              {augmentationResult && (
+                <p className="augmentation-info">
+                  {augmentationResult.augmentedFrames.length} augmented frames generated in {augmentationResult.augmentationDuration.toFixed(0)}ms
                 </p>
               )}
-              {fusedDetections.length > 0 && (
-                <p className="detection-count">
-                  {fusedDetections.length} cards detected (fused from multiple frames)
-                </p>
-              )}
-              {lastResult?.detections && lastResult.detections.length > 0 && fusedDetections.length === 0 && (
+              {lastResult?.detections && lastResult.detections.length > 0 && (
                 <p className="detection-count">
                   {lastResult.detections.filter((d: any) => d.confidence >= Math.min(confidenceThreshold, 0.3)).length} cards detected
                 </p>
@@ -783,11 +771,8 @@ export const CameraInterface = forwardRef<CameraInterfaceRef, CameraInterfacePro
         <div>NMS: {modelState.isLoaded ? 'active' : 'inactive'}</div>
         <div>Detections: {lastResult?.detections?.filter((d: any) => d.confidence >= confidenceThreshold).length ?? 0} / {lastResult?.detections?.length ?? 0}</div>
         <div>State: {detectionState} | Q: {detectionSystemRef.current.analyzeCardPositioning().quality.score.toFixed(2)}</div>
-        {fusedDetections.length > 0 && (
-          <div>Fused: {fusedDetections.length} cards (multi: {fusedDetections.filter(d => d.frameCount > 1).length}, avg frames: {(fusedDetections.reduce((sum, d) => sum + d.frameCount, 0) / fusedDetections.length).toFixed(1)}, consistency: {(fusedDetections.reduce((sum, d) => sum + d.temporalConsistency, 0) / fusedDetections.length * 100).toFixed(0)}%)</div>
-        )}
-        {multiFrameCapture && (
-          <div>Frames: {multiFrameCapture.frames.length} captured in {multiFrameCapture.captureDuration.toFixed(0)}ms</div>
+        {augmentationResult && (
+          <div>Augmented: {augmentationResult.augmentedFrames.length} frames in {augmentationResult.augmentationDuration.toFixed(0)}ms</div>
         )}
         <button 
           onClick={captureDebugFrame}

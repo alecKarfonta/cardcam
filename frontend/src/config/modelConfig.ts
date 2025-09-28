@@ -7,8 +7,9 @@ export const BACKBONE_MODEL_CONFIG: BackboneModelConfig = {
   modelPath: '/models/trading_card_detector_backbone.onnx',
   inputSize: 1088, // Model input size from model_info.json
   executionProviders: [
-    'webgl', // Try WebGL first with ONNX Runtime 1.23.0
-    'wasm'   // Fallback to WASM
+    'webgpu', // Try WebGPU first for maximum performance
+    'webgl',  // Fallback to WebGL
+    'wasm'    // Final fallback to optimized WASM
   ],
   nmsConfig: {
     confidenceThreshold: 0.8,  // High threshold to match validation results (0.82+)
@@ -38,6 +39,11 @@ export const CPU_MODEL_CONFIG: BackboneModelConfig = {
  */
 export const HIGH_PERFORMANCE_CONFIG: BackboneModelConfig = {
   ...BACKBONE_MODEL_CONFIG,
+  executionProviders: [
+    'webgpu', // WebGPU for maximum performance on high-end devices
+    'webgl',  // WebGL fallback
+    'wasm'    // WASM with full optimization
+  ],
   nmsConfig: {
     ...BACKBONE_MODEL_CONFIG.nmsConfig,
     confidenceThreshold: 0.8, // High threshold to match validation

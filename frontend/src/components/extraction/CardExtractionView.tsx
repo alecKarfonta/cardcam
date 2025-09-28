@@ -6,6 +6,7 @@ import './CardExtractionView.css';
 interface CardExtractionViewProps {
   extractedCards: ExtractedCard[];
   sourceImageDimensions?: { width: number; height: number };
+  sourceImageData?: ImageData;
   onBack: () => void;
   onCardSelect?: (card: ExtractedCard) => void;
   onCardUpdate?: (updatedCard: ExtractedCard) => void;
@@ -14,12 +15,13 @@ interface CardExtractionViewProps {
 export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
   extractedCards,
   sourceImageDimensions,
+  sourceImageData,
   onBack,
   onCardSelect,
   onCardUpdate
 }) => {
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.0);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
   const [viewMode, setViewMode] = useState<'grid' | 'details'>('grid');
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
 
@@ -213,6 +215,7 @@ export const CardExtractionView: React.FC<CardExtractionViewProps> = ({
         cardIndex={selectedCardIndex}
         totalCards={filteredCards.length}
         sourceImageDimensions={sourceImageDimensions}
+        sourceImageData={sourceImageData}
         onBack={handleBackToGrid}
         onCardUpdate={onCardUpdate}
         onNext={handleNextCard}

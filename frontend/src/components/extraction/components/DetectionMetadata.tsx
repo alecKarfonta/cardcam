@@ -227,6 +227,125 @@ export const DetectionMetadata: React.FC<DetectionMetadataProps> = ({
           </div>
         )}
 
+        {/* Validation Results (if available) */}
+        {card.validationResult && (
+          <div className="metadata-section">
+            <h4>PostProcess Validation</h4>
+            <div className="metadata-grid">
+              <div className="metadata-item">
+                <label>Validation Status:</label>
+                <span 
+                  className={`validation-status ${card.validationResult.isValid ? 'valid' : 'invalid'}`}
+                  style={{ 
+                    color: card.validationResult.isValid ? '#4CAF50' : '#F44336',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {card.validationResult.isValid ? '✅ Valid' : '❌ Invalid'}
+                </span>
+              </div>
+              <div className="metadata-item">
+                <label>Validation Score:</label>
+                <span 
+                  className="monospace"
+                  style={{ 
+                    color: card.validationResult.validationScore >= 70 ? '#4CAF50' : 
+                           card.validationResult.validationScore >= 50 ? '#FF9800' : '#F44336'
+                  }}
+                >
+                  {card.validationResult.validationScore}/100
+                </span>
+              </div>
+              <div className="metadata-item">
+                <label>Original Confidence:</label>
+                <span 
+                  className="monospace"
+                  style={{ color: getConfidenceColor(card.validationResult.originalConfidence) }}
+                >
+                  {(card.validationResult.originalConfidence * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="metadata-item">
+                <label>Adjusted Confidence:</label>
+                <span 
+                  className="monospace"
+                  style={{ color: getConfidenceColor(card.validationResult.adjustedConfidence) }}
+                >
+                  {(card.validationResult.adjustedConfidence * 100).toFixed(1)}%
+                  {card.validationResult.confidenceAdjustment !== 0 && (
+                    <span 
+                      style={{ 
+                        marginLeft: '8px',
+                        color: card.validationResult.confidenceAdjustment > 0 ? '#4CAF50' : '#F44336',
+                        fontSize: '0.9em'
+                      }}
+                    >
+                      ({card.validationResult.confidenceAdjustment > 0 ? '+' : ''}
+                      {(card.validationResult.confidenceAdjustment * 100).toFixed(1)}%)
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+            
+            {/* Validation Metrics */}
+            <div className="validation-metrics">
+              <h5>Validation Metrics</h5>
+              <div className="metrics-grid">
+                <div className="metric-item">
+                  <label>Card Detected:</label>
+                  <span className={card.validationResult.validationMetrics.detectionFound ? 'metric-pass' : 'metric-fail'}>
+                    {card.validationResult.validationMetrics.detectionFound ? '✅' : '❌'}
+                    {card.validationResult.validationMetrics.detectionFound && (
+                      <span className="metric-detail">
+                        {' '}({(card.validationResult.validationMetrics.detectionConfidence * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="metric-item">
+                  <label>Detection Count:</label>
+                  <span className="monospace">
+                    {card.validationResult.validationMetrics.detectionCount}
+                  </span>
+                </div>
+                <div className="metric-item">
+                  <label>Aspect Ratio:</label>
+                  <span className={card.validationResult.validationMetrics.aspectRatioMatch ? 'metric-pass' : 'metric-fail'}>
+                    {card.validationResult.validationMetrics.aspectRatioMatch ? '✅ Valid' : '❌ Invalid'}
+                  </span>
+                </div>
+                <div className="metric-item">
+                  <label>Size Consistency:</label>
+                  <span className={card.validationResult.validationMetrics.sizeConsistency ? 'metric-pass' : 'metric-fail'}>
+                    {card.validationResult.validationMetrics.sizeConsistency ? '✅ Valid' : '❌ Invalid'}
+                  </span>
+                </div>
+                <div className="metric-item">
+                  <label>Card Features:</label>
+                  <span className={card.validationResult.validationMetrics.cardLikeFeatures ? 'metric-pass' : 'metric-fail'}>
+                    {card.validationResult.validationMetrics.cardLikeFeatures ? '✅ Detected' : '❌ Not Found'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Recommendations */}
+            {card.validationResult.recommendations.length > 0 && (
+              <div className="validation-recommendations">
+                <h5>Recommendations</h5>
+                <ul className="recommendations-list">
+                  {card.validationResult.recommendations.map((recommendation, index) => (
+                    <li key={index} className="recommendation-item">
+                      ⚠️ {recommendation}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Card Metadata (if available) */}
         {card.metadata && (
           <div className="metadata-section">

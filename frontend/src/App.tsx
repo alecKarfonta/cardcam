@@ -3,6 +3,8 @@ import { useAppSelector, useAppDispatch } from './hooks/redux';
 import { CameraInterface, CameraInterfaceRef } from './components/camera/CameraInterface';
 import { CardExtractionView } from './components/extraction/CardExtractionView';
 import { setCurrentView } from './store/slices/appSlice';
+import { updateExtractedCard } from './store/slices/cardExtractionSlice';
+import { ExtractedCard } from './store/slices/cardExtractionSlice';
 import { RootState } from './store';
 import './App.css';
 
@@ -30,13 +32,20 @@ function App() {
     }
   };
 
+  const handleCardUpdate = (updatedCard: ExtractedCard) => {
+    dispatch(updateExtractedCard(updatedCard));
+  };
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'extraction':
         return (
           <CardExtractionView
             extractedCards={extractionState.currentSession?.extractedCards || []}
+            sourceImageDimensions={extractionState.currentSession?.sourceImageDimensions}
+            sourceImageData={extractionState.currentSession?.sourceImageData}
             onBack={handleBackToCamera}
+            onCardUpdate={handleCardUpdate}
           />
         );
       case 'camera':

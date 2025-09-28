@@ -43,7 +43,7 @@ export async function demonstrateHighResExtraction() {
   console.log('   - Card 2: Axis-aligned (bbox extraction)');
 
   // Simulate model input size vs original image size
-  const modelInputSize = { width: 1024, height: 768 };
+  const modelInputSize = { width: 1088, height: 1088 }; // Actual model input size (square)
   const originalImageSize = { width: 1920, height: 1080 };
   
   const scalingFactors = {
@@ -112,11 +112,11 @@ export async function exampleUsage() {
   console.log(`
 // 1. In camera capture handler:
 const cropResults = await EnhancedCardCropper.extractFromCameraFrame(
-  processedFrame,           // Frame used for inference (1024x768)
+  processedFrame,           // Frame used for inference (1088x1088)
   detections,              // Detection results from model
   videoElement,            // Video element for native resolution
   {
-    modelInputSize: { width: 1024, height: 768 },
+    modelInputSize: { width: 1088, height: 1088 }, // Actual model input size (square)
     paddingRatio: 0.05,    // 5% padding around cards
     enablePerspectiveCorrection: true
   }
@@ -151,21 +151,21 @@ export function performanceComparison() {
   const scenarios = [
     {
       name: 'Mobile Camera (720p)',
-      modelInput: { width: 1024, height: 768 },
+      modelInput: { width: 1088, height: 1088 },
       nativeRes: { width: 1280, height: 720 },
-      improvement: '1.2x'
+      improvement: '0.8x'
     },
     {
       name: 'HD Camera (1080p)',
-      modelInput: { width: 1024, height: 768 },
+      modelInput: { width: 1088, height: 1088 },
       nativeRes: { width: 1920, height: 1080 },
-      improvement: '2.6x'
+      improvement: '1.8x'
     },
     {
       name: '4K Camera (2160p)',
-      modelInput: { width: 1024, height: 768 },
+      modelInput: { width: 1088, height: 1088 },
       nativeRes: { width: 3840, height: 2160 },
-      improvement: '10.5x'
+      improvement: '7.1x'
     }
   ];
 

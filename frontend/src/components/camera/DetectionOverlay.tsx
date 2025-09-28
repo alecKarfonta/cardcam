@@ -150,7 +150,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           if (entry.target === videoElement) {
-            console.log('🔍 Video element resized via ResizeObserver');
             setTimeout(() => {
               updateCanvasSize();
             }, 10);

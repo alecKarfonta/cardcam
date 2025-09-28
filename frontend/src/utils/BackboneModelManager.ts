@@ -34,8 +34,11 @@ export class BackboneModelManager {
     // Point to local ONNX Runtime assets
     const base = (process.env.PUBLIC_URL || '') + '/onnx/';
     ort.env.wasm.wasmPaths = base;
-    ort.env.wasm.numThreads = 1; // Single threaded for compatibility
-    ort.env.wasm.simd = false; // Disable SIMD to avoid compatibility issues
+    
+    // Optimize WASM configuration for performance
+    const maxThreads = Math.min(navigator.hardwareConcurrency || 4, 8);
+    ort.env.wasm.numThreads = maxThreads;
+    ort.env.wasm.simd = true; // Enable SIMD for significant performance boost
     ort.env.wasm.proxy = false; // Avoid proxy loader issues
     
     // Try to set more permissive settings for opset compatibility
@@ -48,9 +51,21 @@ export class BackboneModelManager {
     }
     
     console.log('🔧 Backbone Model Manager - ONNX Runtime configured for maximum compatibility');
-    console.log('📁 WASM path:', ort.env.wasm.wasmPaths);
-    console.log('🔧 SIMD enabled:', ort.env.wasm.simd);
-    console.log('🔧 Threads:', ort.env.wasm.numThreads);
+    console.log('🔧 ONNX Runtime optimized configuration:');
+    console.log(`   - WASM path: ${ort.env.wasm.wasmPaths}`);
+    console.log(`   - Threads: ${ort.env.wasm.numThreads} (max available: ${navigator.hardwareConcurrency})`);
+    console.log(`   - SIMD enabled: ${ort.env.wasm.simd}`);
+    console.log(`   - WebGPU available: ${this.isWebGPUSupported()}`);
+  }
+
+  private isWebGPUSupported(): boolean {
+    try {
+      return 'gpu' in navigator && 
+             navigator.gpu !== undefined && 
+             typeof (navigator.gpu as any)?.requestAdapter === 'function';
+    } catch {
+      return false;
+    }
   }
 
   async loadModel(): Promise<void> {
@@ -62,27 +77,70 @@ export class BackboneModelManager {
       
       const sessionOptions: ort.InferenceSession.SessionOptions = {
         executionProviders: this.config.executionProviders,
-        graphOptimizationLevel: 'disabled', // Disable optimizations that might cause issues
-        enableMemPattern: false,
-        enableCpuMemArena: false,
-        logSeverityLevel: 0, // Enable verbose logging
-        logVerbosityLevel: 0, // Maximum verbosity
+        graphOptimizationLevel: 'all', // Enable all optimizations for better performance
+        enableMemPattern: true, // Enable memory pattern optimization
+        enableCpuMemArena: true, // Enable CPU memory arena for better memory management
+        executionMode: 'parallel', // Enable parallel execution
+        interOpNumThreads: Math.min(navigator.hardwareConcurrency || 4, 8),
+        intraOpNumThreads: Math.min(navigator.hardwareConcurrency || 4, 8),
+        logSeverityLevel: 2, // Reduce logging for better performance (2 = warning level)
+        logVerbosityLevel: 0, // Minimal verbosity for performance
       };
 
+      const loadStartTime = performance.now();
       this.session = await ort.InferenceSession.create(
         this.config.modelPath,
         sessionOptions
       );
+      const loadTime = performance.now() - loadStartTime;
 
       this.isLoaded = true;
-      console.log('✅ Backbone model loaded successfully!');
+      console.log(`✅ Backbone model loaded successfully in ${loadTime.toFixed(2)}ms!`);
       console.log('📥 Input names:', this.session.inputNames);
       console.log('📤 Output names:', this.session.outputNames);
+      
+      // Warm up the model with a dummy inference
+      await this.warmUpModel();
+      
+      console.log('🎯 Backbone model ready for high-performance inference');
       console.log('🎯 Expected output format: (1, 6, 8400) - [cx, cy, w, h, angle, confidence]');
 
     } catch (error) {
       console.error('❌ Backbone model loading failed:', error);
       throw new Error(`Backbone model loading failed: ${error}`);
+    }
+  }
+
+  private async warmUpModel(): Promise<void> {
+    if (!this.session) return;
+    
+    try {
+      console.log('🔥 Warming up backbone model for optimal performance...');
+      const warmupStartTime = performance.now();
+      
+      // Create a dummy input tensor with the correct shape
+      const inputSize = this.config.inputSize;
+      const dummyData = new Float32Array(1 * 3 * inputSize * inputSize);
+      // Fill with random-ish data to simulate real input
+      for (let i = 0; i < dummyData.length; i++) {
+        dummyData[i] = Math.random() * 0.5 + 0.25; // Values between 0.25 and 0.75
+      }
+      
+      const dummyTensor = new ort.Tensor('float32', dummyData, [1, 3, inputSize, inputSize]);
+      
+      // Run a few warmup inferences
+      for (let i = 0; i < 3; i++) {
+        await this.session.run({
+          [this.session.inputNames[0]]: dummyTensor
+        });
+      }
+      
+      const warmupTime = performance.now() - warmupStartTime;
+      console.log(`🔥 Backbone model warmup completed in ${warmupTime.toFixed(2)}ms`);
+      console.log('⚡ Backbone model is now optimized for fast inference');
+      
+    } catch (error) {
+      console.warn('⚠️ Backbone model warmup failed (non-critical):', error);
     }
   }
 

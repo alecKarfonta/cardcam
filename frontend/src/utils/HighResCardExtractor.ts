@@ -38,7 +38,7 @@ export class HighResCardExtractor {
 
   constructor(options: Partial<HighResExtractionOptions> = {}) {
     this.options = {
-      modelInputSize: { width: 1024, height: 768 },
+      modelInputSize: { width: 1088, height: 1088 }, // Actual model input size (square)
       paddingRatio: 0.05, // 5% padding around detected cards
       minCardSize: 200,
       maxCardSize: 2000,
@@ -271,20 +271,26 @@ export class HighResCardExtractor {
     if (x <= 1 && y <= 1 && width <= 1 && height <= 1) {
       // Normalized coordinates - scale to original image size
       console.log(`   🔢 Detected normalized coordinates, scaling to original image size`);
+      console.log(`   🔍 COORDINATE DEBUG: Normalized values: x=${x}, y=${y}, w=${width}, h=${height}`);
+      console.log(`   🔍 COORDINATE DEBUG: Original image size: ${originalImageData.width}x${originalImageData.height}`);
       x = Math.round(x * originalImageData.width);
       y = Math.round(y * originalImageData.height);
       width = Math.round(width * originalImageData.width);
       height = Math.round(height * originalImageData.height);
       console.log(`   📐 Scaled to original: x=${x}, y=${y}, w=${width}, h=${height}`);
+      console.log(`   🔍 COORDINATE DEBUG: Aspect ratio: ${(width/height).toFixed(3)} (${width > height ? 'horizontal' : 'vertical'})`);
     } else {
       // Pixel coordinates from model input - scale to original image
       console.log(`   🔢 Detected pixel coordinates, scaling by factors`);
+      console.log(`   🔍 COORDINATE DEBUG: Pixel values: x=${x}, y=${y}, w=${width}, h=${height}`);
+      console.log(`   🔍 COORDINATE DEBUG: Scaling factors: x=${scalingFactors.x.toFixed(3)}, y=${scalingFactors.y.toFixed(3)}`);
       const originalX = x, originalY = y, originalW = width, originalH = height;
       x = Math.round(x * scalingFactors.x);
       y = Math.round(y * scalingFactors.y);
       width = Math.round(width * scalingFactors.x);
       height = Math.round(height * scalingFactors.y);
       console.log(`   📐 Scaled from (${originalX}, ${originalY}, ${originalW}, ${originalH}) to (${x}, ${y}, ${width}, ${height})`);
+      console.log(`   🔍 COORDINATE DEBUG: Aspect ratio: ${(width/height).toFixed(3)} (${width > height ? 'horizontal' : 'vertical'})`);
     }
 
     // Apply padding - ensure minimum padding for high-resolution extraction
@@ -621,44 +627,83 @@ export class HighResCardExtractor {
     height: number
   ): ImageData | null {
     try {
+      console.log(`   🔍 cropRectangle DEBUG: Input coordinates: (${x}, ${y}) ${width}x${height}`);
+      console.log(`   🔍 cropRectangle DEBUG: Source image: ${sourceImageData.width}x${sourceImageData.height}`);
+      
+      // Store original values for debugging
+      const originalX = x, originalY = y, originalWidth = width, originalHeight = height;
+      
       // Ensure coordinates are within bounds
       x = Math.max(0, Math.min(x, sourceImageData.width - 1));
       y = Math.max(0, Math.min(y, sourceImageData.height - 1));
       width = Math.min(width, sourceImageData.width - x);
       height = Math.min(height, sourceImageData.height - y);
 
+      console.log(`   🔍 cropRectangle DEBUG: Bounded coordinates: (${x}, ${y}) ${width}x${height}`);
+      console.log(`   🔍 cropRectangle DEBUG: Coordinate changes: x(${originalX}→${x}), y(${originalY}→${y}), w(${originalWidth}→${width}), h(${originalHeight}→${height})`);
+
       if (width <= 0 || height <= 0) {
+        console.error(`   ❌ cropRectangle DEBUG: Invalid dimensions after bounding: ${width}x${height}`);
         return null;
       }
 
       // Create canvas for cropping
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
+      if (!ctx) {
+        console.error('   ❌ cropRectangle DEBUG: Failed to get destination canvas context');
+        return null;
+      }
 
       canvas.width = width;
       canvas.height = height;
+      console.log(`   🔍 cropRectangle DEBUG: Created destination canvas: ${canvas.width}x${canvas.height}`);
 
       // Create source canvas
       const sourceCanvas = document.createElement('canvas');
       const sourceCtx = sourceCanvas.getContext('2d');
-      if (!sourceCtx) return null;
+      if (!sourceCtx) {
+        console.error('   ❌ cropRectangle DEBUG: Failed to get source canvas context');
+        return null;
+      }
 
       sourceCanvas.width = sourceImageData.width;
       sourceCanvas.height = sourceImageData.height;
+      console.log(`   🔍 cropRectangle DEBUG: Created source canvas: ${sourceCanvas.width}x${sourceCanvas.height}`);
+      
+      // Put image data on source canvas
       sourceCtx.putImageData(sourceImageData, 0, 0);
+      console.log(`   🔍 cropRectangle DEBUG: Put ImageData on source canvas`);
 
       // Draw the cropped region
+      console.log(`   🔍 cropRectangle DEBUG: Drawing region: src(${x}, ${y}, ${width}, ${height}) → dest(0, 0, ${width}, ${height})`);
       ctx.drawImage(
         sourceCanvas,
         x, y, width, height,  // Source rectangle
         0, 0, width, height   // Destination rectangle
       );
 
-      return ctx.getImageData(0, 0, width, height);
+      // Get the result
+      const result = ctx.getImageData(0, 0, width, height);
+      console.log(`   🔍 cropRectangle DEBUG: Extracted ImageData: ${result.width}x${result.height}, data length: ${result.data.length}`);
+      
+      // Check if the result is actually blank (all pixels are transparent/black)
+      let nonZeroPixels = 0;
+      for (let i = 0; i < result.data.length; i += 4) {
+        if (result.data[i] !== 0 || result.data[i + 1] !== 0 || result.data[i + 2] !== 0 || result.data[i + 3] !== 0) {
+          nonZeroPixels++;
+        }
+      }
+      console.log(`   🔍 cropRectangle DEBUG: Non-zero pixels: ${nonZeroPixels}/${result.data.length / 4} (${((nonZeroPixels / (result.data.length / 4)) * 100).toFixed(1)}%)`);
+      
+      if (nonZeroPixels === 0) {
+        console.warn(`   ⚠️ cropRectangle DEBUG: Extracted image appears to be completely blank!`);
+      }
+
+      return result;
 
     } catch (error) {
-      console.error('Failed to crop rectangle:', error);
+      console.error('❌ cropRectangle DEBUG: Exception occurred:', error);
       return null;
     }
   }

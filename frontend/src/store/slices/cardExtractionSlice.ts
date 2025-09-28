@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { CardDetection } from './inferenceSlice';
+import { PostProcessValidationResult } from '../../utils/PostProcessValidator';
 
 export interface ExtractedCard {
   id: string;
@@ -31,6 +32,7 @@ export interface ExtractedCard {
   };
   qualityScore?: number;
   qualityFactors?: string[];
+  validationResult?: PostProcessValidationResult;
 }
 
 export interface ExtractionSession {
@@ -40,6 +42,7 @@ export interface ExtractionSession {
     width: number;
     height: number;
   };
+  sourceImageData?: ImageData; // Store original image for re-extraction
   extractedCards: ExtractedCard[];
   totalDetections: number;
   successfulExtractions: number;
@@ -77,6 +80,7 @@ const cardExtractionSlice = createSlice({
   reducers: {
     startExtraction: (state, action: PayloadAction<{
       sourceImageDimensions: { width: number; height: number };
+      sourceImageData?: ImageData;
       totalDetections: number;
     }>) => {
       const sessionId = `session_${Date.now()}`;
@@ -85,6 +89,7 @@ const cardExtractionSlice = createSlice({
         id: sessionId,
         timestamp: Date.now(),
         sourceImageDimensions: action.payload.sourceImageDimensions,
+        sourceImageData: action.payload.sourceImageData,
         extractedCards: [],
         totalDetections: action.payload.totalDetections,
         successfulExtractions: 0,
@@ -216,6 +221,24 @@ const cardExtractionSlice = createSlice({
     resetExtraction: (state) => {
       return initialState;
     },
+
+    updateExtractedCard: (state, action: PayloadAction<ExtractedCard>) => {
+      if (state.currentSession) {
+        const cardIndex = state.currentSession.extractedCards.findIndex(c => c.id === action.payload.id);
+        if (cardIndex !== -1) {
+          state.currentSession.extractedCards[cardIndex] = action.payload;
+        }
+      }
+      
+      // Also update in history
+      for (const session of state.extractionHistory) {
+        const cardIndex = session.extractedCards.findIndex(c => c.id === action.payload.id);
+        if (cardIndex !== -1) {
+          session.extractedCards[cardIndex] = action.payload;
+          break;
+        }
+      }
+    },
   },
 });
 
@@ -232,6 +255,7 @@ export const {
   clearExtractionHistory,
   loadSessionFromHistory,
   resetExtraction,
+  updateExtractedCard,
 } = cardExtractionSlice.actions;
 
 export default cardExtractionSlice.reducer;

@@ -146,6 +146,12 @@ export const useBackboneInference = () => {
 
     for (let i = 0; i < imageDataArray.length; i++) {
       console.log(`📊 Processing image ${i + 1}/${imageDataArray.length}...`);
+      
+      // Yield to browser between each inference to prevent UI blocking
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      
       const result = await runInference(imageDataArray[i], { skipQueue: true });
       if (result) {
         results.push(result);
@@ -203,6 +209,7 @@ export const useBackboneInference = () => {
     runInference,
     runBatchInference,
     updateModelConfig,
+    backboneModelManager: modelManagerRef.current, // Expose BackboneModelManager for PostProcessValidator
     updateNMSConfig,
     getCurrentConfig,
     getNMSConfig,

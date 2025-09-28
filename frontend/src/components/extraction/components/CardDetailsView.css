@@ -1,7 +1,7 @@
 .card-details-view {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   background: #f8f9fa;
 }
 
@@ -48,7 +48,7 @@
   gap: 20px;
   padding: 20px;
   flex: 1;
-  overflow: hidden;
+  min-height: 0; /* Allows grid items to shrink below content size */
 }
 
 /* Image Section */
@@ -185,6 +185,7 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
+  touch-action: pan-x pan-y;
 }
 
 .canvas-wrapper {
@@ -294,11 +295,11 @@
 @media (max-width: 968px) {
   .details-content {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    gap: 15px;
   }
   
   .info-section {
-    max-height: 400px;
+    min-height: 200px;
   }
   
   .viewer-header {
@@ -309,50 +310,260 @@
   
   .viewer-controls {
     flex-wrap: wrap;
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .canvas-container {
+    min-height: 250px;
   }
 }
 
 @media (max-width: 768px) {
-  .card-details-view {
-    height: 100vh;
-  }
-  
   .details-header {
-    padding: 15px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   
   .details-header h2 {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
+  }
+  
+  .back-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
   }
   
   .details-content {
-    padding: 15px;
-    gap: 15px;
+    padding: 8px;
+    gap: 8px;
+  }
+  
+  .info-section {
+    min-height: 150px;
   }
   
   .viewer-header {
-    padding: 15px;
+    padding: 8px;
+    gap: 8px;
+  }
+  
+  .viewer-info {
+    flex-wrap: wrap;
+    gap: 6px;
   }
   
   .viewer-info h3 {
-    font-size: 1.1rem;
-  }
-  
-  .viewer-controls {
-    gap: 10px;
-  }
-  
-  .zoom-controls {
-    gap: 4px;
-  }
-  
-  .tab-btn {
-    padding: 12px 15px;
     font-size: 0.9rem;
   }
   
+  .confidence-badge {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+  
+  .viewer-controls {
+    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .zoom-controls {
+    gap: 3px;
+    align-self: center;
+    padding: 2px;
+  }
+  
+  .zoom-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 0.9rem;
+  }
+  
+  .zoom-level {
+    min-width: 40px;
+    font-size: 0.7rem;
+  }
+  
+  .reset-view-btn,
+  .download-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .tab-btn {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+  
   .canvas-container {
-    min-height: 300px;
+    min-height: 180px;
+  }
+  
+  .viewer-footer {
+    padding: 6px 8px;
+  }
+  
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .details-header {
+    padding: 6px 8px;
+    min-height: 50px;
+  }
+  
+  .details-header h2 {
+    font-size: 1rem;
+  }
+  
+  .back-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+  
+  .details-content {
+    padding: 6px;
+    gap: 6px;
+  }
+  
+  .info-section {
+    min-height: 120px;
+  }
+  
+  .viewer-header {
+    padding: 6px;
+    gap: 6px;
+  }
+  
+  .viewer-info h3 {
+    font-size: 0.8rem;
+  }
+  
+  .confidence-badge {
+    padding: 2px 4px;
+    font-size: 0.65rem;
+  }
+  
+  .viewer-controls {
+    gap: 4px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .zoom-controls {
+    gap: 2px;
+    padding: 1px;
+    align-self: center;
+  }
+  
+  .zoom-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 0.8rem;
+  }
+  
+  .zoom-level {
+    min-width: 35px;
+    font-size: 0.65rem;
+  }
+  
+  .reset-view-btn,
+  .download-btn {
+    padding: 3px 6px;
+    font-size: 0.65rem;
+  }
+  
+  .tab-btn {
+    padding: 6px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .canvas-container {
+    min-height: 120px;
+  }
+  
+  .viewer-footer {
+    padding: 4px 6px;
+  }
+  
+  .nav-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .navigation-controls {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 360px) {
+  .details-header {
+    padding: 4px 6px;
+    min-height: 45px;
+  }
+  
+  .details-header h2 {
+    font-size: 0.9rem;
+  }
+  
+  .back-btn {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+  
+  .details-content {
+    padding: 4px;
+    gap: 4px;
+  }
+  
+  .viewer-header {
+    padding: 4px;
+    gap: 4px;
+  }
+  
+  .viewer-info h3 {
+    font-size: 0.75rem;
+  }
+  
+  .confidence-badge {
+    padding: 1px 3px;
+    font-size: 0.6rem;
+  }
+  
+  .zoom-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+  }
+  
+  .zoom-level {
+    min-width: 30px;
+    font-size: 0.6rem;
+  }
+  
+  .reset-view-btn,
+  .download-btn {
+    padding: 2px 4px;
+    font-size: 0.6rem;
+  }
+  
+  .tab-btn {
+    padding: 4px 6px;
+    font-size: 0.65rem;
+  }
+  
+  .canvas-container {
+    min-height: 100px;
+  }
+  
+  .nav-btn {
+    padding: 3px 6px;
+    font-size: 0.65rem;
   }
 }
 

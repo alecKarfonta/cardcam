@@ -1,5 +1,14 @@
 import { CardDetection, InferenceResult } from '../store/slices/inferenceSlice';
 
+export interface AugmentedInferenceResult extends InferenceResult {
+  /** Indicates if this result is from an augmented frame */
+  isAugmented?: boolean;
+  /** Type of augmentation applied (if any) */
+  augmentationType?: string;
+  /** Augmentation parameters used */
+  augmentationParameters?: Record<string, number>;
+}
+
 export interface FusedDetection extends CardDetection {
   /** Number of frames this detection appeared in */
   frameCount: number;
@@ -19,13 +28,19 @@ export interface FusedDetection extends CardDetection {
     sizeVariance: number;
     confidenceVariance: number;
   };
+  /** Number of augmented frames this detection appeared in */
+  augmentedFrameCount: number;
+  /** Augmentation robustness score (0-1, higher = more robust across augmentations) */
+  augmentationRobustness: number;
+  /** Types of augmentations where this detection was found */
+  augmentationTypes: string[];
 }
 
 export interface DetectionFusionResult {
   /** Fused detections with improved confidence and positioning */
   fusedDetections: FusedDetection[];
   /** Original results from each frame for reference */
-  originalResults: InferenceResult[];
+  originalResults: (InferenceResult | AugmentedInferenceResult)[];
   /** Statistics about the fusion process */
   fusionStats: {
     totalDetections: number;
@@ -36,6 +51,9 @@ export interface DetectionFusionResult {
     singleFrameDetections: number;
     averageTemporalConsistency: number;
     robustnessScore: number;
+    augmentedFrameCount: number;
+    augmentationRobustnessScore: number;
+    averageAugmentationRobustness: number;
   };
 }
 
@@ -53,9 +71,10 @@ export class DetectionFusion {
 
   /**
    * Fuse detection results from multiple frames with enhanced robustness
+   * Now supports augmented frames for Test Time Augmentation (TTA)
    */
   static fuseDetections(
-    results: InferenceResult[],
+    results: (InferenceResult | AugmentedInferenceResult)[],
     options: {
       iouThreshold?: number;
       minFrameCount?: number;
@@ -64,6 +83,7 @@ export class DetectionFusion {
       enableTemporalConsistency?: boolean;
       preserveSingleFrameDetections?: boolean;
       multiFrameBoostFactor?: number;
+      augmentationBoostFactor?: number;
     } = {}
   ): DetectionFusionResult {
     const {
@@ -73,16 +93,36 @@ export class DetectionFusion {
       positionWeight = this.DEFAULT_POSITION_WEIGHT,
       enableTemporalConsistency = true,
       preserveSingleFrameDetections = true,
-      multiFrameBoostFactor = this.MULTI_FRAME_CONFIDENCE_BOOST
+      multiFrameBoostFactor = this.MULTI_FRAME_CONFIDENCE_BOOST,
+      augmentationBoostFactor = 0.1 // Additional boost for augmentation robustness
     } = options;
 
-    console.log(`🔄 Fusing detections from ${results.length} frames...`);
+    console.log(`🔄 Fusing detections from ${results.length} frames (including augmented)...`);
     
-    // Collect all detections with frame information
-    const allDetections: Array<CardDetection & { frameIndex: number }> = [];
+    // Separate original and augmented results
+    const originalResults = results.filter(r => !(r as AugmentedInferenceResult).isAugmented);
+    const augmentedResults = results.filter(r => (r as AugmentedInferenceResult).isAugmented) as AugmentedInferenceResult[];
+    
+    console.log(`📊 Frame breakdown: ${originalResults.length} original, ${augmentedResults.length} augmented`);
+    
+    // Collect all detections with frame and augmentation information
+    const allDetections: Array<CardDetection & { 
+      frameIndex: number; 
+      isAugmented: boolean;
+      augmentationType?: string;
+    }> = [];
+    
     results.forEach((result, frameIndex) => {
+      const isAugmented = !!(result as AugmentedInferenceResult).isAugmented;
+      const augmentationType = (result as AugmentedInferenceResult).augmentationType;
+      
       result.detections.forEach(detection => {
-        allDetections.push({ ...detection, frameIndex });
+        allDetections.push({ 
+          ...detection, 
+          frameIndex,
+          isAugmented,
+          augmentationType
+        });
       });
     });
 
@@ -110,7 +150,8 @@ export class DetectionFusion {
         confidenceWeight,
         positionWeight,
         multiFrameBoostFactor,
-        enableTemporalConsistency
+        enableTemporalConsistency,
+        augmentationBoostFactor
       );
       
       fusedDetections.push(fusedDetection);
@@ -145,6 +186,12 @@ export class DetectionFusion {
     const averageTemporalConsistency = fusedDetections.length > 0 ? 
       fusedDetections.reduce((sum, d) => sum + d.temporalConsistency, 0) / fusedDetections.length : 0;
     
+    // Calculate augmentation statistics
+    const augmentedFrameCount = augmentedResults.length;
+    const averageAugmentationRobustness = fusedDetections.length > 0 ?
+      fusedDetections.reduce((sum, d) => sum + d.augmentationRobustness, 0) / fusedDetections.length : 0;
+    const augmentationRobustnessScore = this.calculateAugmentationRobustnessScore(fusedDetections);
+    
     // Calculate overall robustness score
     const robustnessScore = this.calculateRobustnessScore(fusedDetections, results.length);
 
@@ -156,13 +203,20 @@ export class DetectionFusion {
       multiFrameDetections,
       singleFrameDetections,
       averageTemporalConsistency,
-      robustnessScore
+      robustnessScore,
+      augmentedFrameCount,
+      augmentationRobustnessScore,
+      averageAugmentationRobustness
     };
 
     console.log(`✅ Enhanced fusion complete:`, fusionStats);
     console.log(`🎯 Multi-frame detections: ${multiFrameDetections} (${((multiFrameDetections / Math.max(fusedDetections.length, 1)) * 100).toFixed(1)}%)`);
     console.log(`📊 Average temporal consistency: ${(averageTemporalConsistency * 100).toFixed(1)}%`);
     console.log(`🛡️ Robustness score: ${(robustnessScore * 100).toFixed(1)}%`);
+    if (augmentedFrameCount > 0) {
+      console.log(`🎨 Augmentation frames: ${augmentedFrameCount}, robustness: ${(augmentationRobustnessScore * 100).toFixed(1)}%`);
+      console.log(`🔄 Average augmentation robustness: ${(averageAugmentationRobustness * 100).toFixed(1)}%`);
+    }
 
     return {
       fusedDetections,
@@ -175,10 +229,22 @@ export class DetectionFusion {
    * Group detections that likely represent the same card across frames
    */
   private static groupSimilarDetections(
-    detections: Array<CardDetection & { frameIndex: number }>,
+    detections: Array<CardDetection & { 
+      frameIndex: number; 
+      isAugmented: boolean;
+      augmentationType?: string;
+    }>,
     iouThreshold: number
-  ): Array<Array<CardDetection & { frameIndex: number }>> {
-    const groups: Array<Array<CardDetection & { frameIndex: number }>> = [];
+  ): Array<Array<CardDetection & { 
+    frameIndex: number; 
+    isAugmented: boolean;
+    augmentationType?: string;
+  }>> {
+    const groups: Array<Array<CardDetection & { 
+      frameIndex: number; 
+      isAugmented: boolean;
+      augmentationType?: string;
+    }>> = [];
     const processed = new Set<number>();
 
     for (let i = 0; i < detections.length; i++) {
@@ -239,9 +305,16 @@ export class DetectionFusion {
     confidenceWeight: number,
     positionWeight: number
   ): FusedDetection {
+    // Convert to enhanced format with default augmentation values
+    const enhancedGroup = group.map(detection => ({
+      ...detection,
+      isAugmented: false,
+      augmentationType: undefined
+    }));
+    
     // Use enhanced method with default parameters
     return this.createEnhancedFusedDetection(
-      group,
+      enhancedGroup,
       confidenceWeight,
       positionWeight,
       this.MULTI_FRAME_CONFIDENCE_BOOST,
@@ -253,11 +326,16 @@ export class DetectionFusion {
    * Create an enhanced fused detection from a group of similar detections
    */
   private static createEnhancedFusedDetection(
-    group: Array<CardDetection & { frameIndex: number }>,
+    group: Array<CardDetection & { 
+      frameIndex: number; 
+      isAugmented: boolean;
+      augmentationType?: string;
+    }>,
     confidenceWeight: number,
     positionWeight: number,
     multiFrameBoostFactor: number,
-    enableTemporalConsistency: boolean
+    enableTemporalConsistency: boolean,
+    augmentationBoostFactor: number = 0.1
   ): FusedDetection {
     // Calculate weighted average position
     const totalWeight = group.reduce((sum, d) => sum + d.confidence, 0);
@@ -303,10 +381,17 @@ export class DetectionFusion {
     const temporalConsistency = this.calculateTemporalConsistency(group);
     const stability = this.calculateStabilityMetrics(group);
     
+    // Calculate augmentation metrics
+    const augmentedFrames = group.filter(d => d.isAugmented);
+    const augmentedFrameCount = augmentedFrames.length;
+    const augmentationTypes = Array.from(new Set(augmentedFrames.map(d => d.augmentationType).filter(Boolean)));
+    const augmentationRobustness = this.calculateAugmentationRobustness(group);
+    
     // Enhanced confidence boosting for multi-frame detections
     const frameCountBoost = Math.min(0.25, (group.length - 1) * multiFrameBoostFactor);
     const consistencyBoost = enableTemporalConsistency ? temporalConsistency * 0.1 : 0;
-    const confidenceBoost = frameCountBoost + consistencyBoost;
+    const augmentationBoost = augmentedFrameCount > 0 ? augmentationRobustness * augmentationBoostFactor : 0;
+    const confidenceBoost = frameCountBoost + consistencyBoost + augmentationBoost;
     
     // Use weighted combination of max and average confidence
     const baseConfidence = (maxConfidence * 0.7) + (averageConfidence * 0.3);
@@ -334,6 +419,9 @@ export class DetectionFusion {
       temporalConsistency,
       confidenceBoost,
       stability,
+      augmentedFrameCount,
+      augmentationRobustness,
+      augmentationTypes: augmentationTypes as string[],
       id: `fused_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     };
 
@@ -413,7 +501,11 @@ export class DetectionFusion {
    * Create a single-frame detection with appropriate metadata
    */
   private static createSingleFrameDetection(
-    detection: CardDetection & { frameIndex: number },
+    detection: CardDetection & { 
+      frameIndex: number;
+      isAugmented: boolean;
+      augmentationType?: string;
+    },
     totalFrames: number
   ): FusedDetection {
     return {
@@ -429,8 +521,47 @@ export class DetectionFusion {
         sizeVariance: 0,
         confidenceVariance: 0
       },
+      augmentedFrameCount: detection.isAugmented ? 1 : 0,
+      augmentationRobustness: detection.isAugmented ? 0.5 : 0,
+      augmentationTypes: detection.augmentationType ? [detection.augmentationType] : [] as string[],
       id: `single_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     };
+  }
+
+  /**
+   * Calculate augmentation robustness score for a group of detections
+   */
+  private static calculateAugmentationRobustness(
+    group: Array<CardDetection & { 
+      frameIndex: number; 
+      isAugmented: boolean;
+      augmentationType?: string;
+    }>
+  ): number {
+    const augmentedFrames = group.filter(d => d.isAugmented);
+    
+    if (augmentedFrames.length === 0) return 0;
+    
+    // Count unique augmentation types
+    const uniqueAugmentationTypes = new Set(
+      augmentedFrames.map(d => d.augmentationType).filter(Boolean)
+    ).size;
+    
+    // Calculate robustness based on:
+    // 1. Ratio of augmented frames to total frames
+    // 2. Diversity of augmentation types
+    // 3. Consistency of detection across augmentations
+    
+    const augmentationRatio = augmentedFrames.length / group.length;
+    const diversityScore = Math.min(1.0, uniqueAugmentationTypes / 4); // Normalize to max 4 types
+    
+    // Confidence consistency across augmented frames
+    const augmentedConfidences = augmentedFrames.map(d => d.confidence);
+    const avgAugmentedConfidence = augmentedConfidences.reduce((sum, c) => sum + c, 0) / augmentedConfidences.length;
+    const augmentedVariance = this.calculateVariance(augmentedConfidences);
+    const consistencyScore = Math.max(0, 1 - (augmentedVariance / avgAugmentedConfidence));
+    
+    return (augmentationRatio * 0.4) + (diversityScore * 0.3) + (consistencyScore * 0.3);
   }
 
   /**
@@ -504,6 +635,29 @@ export class DetectionFusion {
     
     // Combine metrics for overall robustness
     return (multiFrameRatio * 0.4) + (avgConsistency * 0.4) + (Math.min(avgBoost / 0.2, 1) * 0.2);
+  }
+
+  /**
+   * Calculate augmentation robustness score for the fusion result
+   */
+  private static calculateAugmentationRobustnessScore(
+    fusedDetections: FusedDetection[]
+  ): number {
+    if (fusedDetections.length === 0) return 0;
+
+    // Detections with augmented frames ratio
+    const augmentedDetectionRatio = fusedDetections.filter(d => d.augmentedFrameCount > 0).length / fusedDetections.length;
+    
+    // Average augmentation robustness
+    const avgAugmentationRobustness = fusedDetections.reduce((sum, d) => sum + d.augmentationRobustness, 0) / fusedDetections.length;
+    
+    // Augmentation diversity (unique augmentation types across all detections)
+    const allAugmentationTypes = new Set(
+      fusedDetections.flatMap(d => d.augmentationTypes)
+    ).size;
+    const diversityScore = Math.min(1.0, allAugmentationTypes / 6); // Normalize to max 6 types
+    
+    return (augmentedDetectionRatio * 0.5) + (avgAugmentationRobustness * 0.3) + (diversityScore * 0.2);
   }
 
   /**
