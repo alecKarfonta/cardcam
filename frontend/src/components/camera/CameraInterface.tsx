@@ -373,8 +373,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
         <DetectionOverlay
           detections={lastResult?.detections || []}
           quality={lastResult ? detectionSystemRef.current.analyzeCardPositioning().quality : undefined}
-          canvasWidth={videoRef.current?.videoWidth || 1920}
-          canvasHeight={videoRef.current?.videoHeight || 1080}
+          videoElement={videoRef.current}
           className="detection-overlay"
           confidenceThreshold={confidenceThreshold}
         />

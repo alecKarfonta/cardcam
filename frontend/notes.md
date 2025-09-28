@@ -123,6 +123,16 @@
 - **Docker Runtime**: ✅ NVIDIA runtime available and functional
 - **Status**: GPU access working despite sm_120 compatibility warnings
 
+## Frontend Loading Issue Resolution (2025-09-28)
+- **Problem**: Frontend failing to load with MIME type errors for .mjs files
+- **Root Cause**: External nginx proxy serving .mjs files with `application/octet-stream` instead of `text/javascript`
+- **Network Issue**: Docker container not accessible from external nginx (resolved with host networking)
+- **Solutions Applied**:
+  1. ✅ Fixed Docker container nginx MIME type configuration
+  2. ✅ Switched to host networking mode (port 80 instead of 3001)
+  3. ✅ Updated external nginx proxy to use `proxy_hide_header Content-Type` and explicit MIME type overrides
+- **Final Status**: ✅ Frontend loading correctly on both desktop and mobile browsers
+
 ## Network Architecture
 
 ### Connection Flow
@@ -159,6 +169,30 @@ Internet → mlapi.us (192.168.1.196) → nginx proxy → 192.168.1.77:3001 → 
   - Styled to match camera interface design
   - Mobile-responsive with touch-friendly controls
   - Works with any inference backend (no model changes needed)
+
+## Desktop Scaling Issue (2025-09-28) ✅ RESOLVED
+- **Problem**: Bounding boxes scale with window resize but camera output doesn't align
+- **Root Cause**: Video element uses CSS scaling (`object-fit: cover`) while canvas uses fixed native dimensions
+- **Affected Platform**: Desktop only (mobile works fine)
+- **Technical Details**:
+  - Video: CSS `width: 100%; height: 100%; object-fit: cover`
+  - Canvas: Fixed dimensions `videoWidth x videoHeight` with CSS `width: 100%; height: 100%`
+  - Scaling mismatch between CSS-scaled video and fixed-dimension canvas
+- **Solution Applied**:
+  - Modified DetectionOverlay to accept `videoElement` instead of fixed `canvasWidth/canvasHeight`
+  - Canvas dimensions now dynamically match video's rendered size using `getBoundingClientRect()`
+  - Added window resize listener to update canvas dimensions on window resize
+  - Scaling calculations now use video's native resolution for coordinate transformation
+- **Status**: ✅ RESOLVED - Canvas and video now scale together properly
+
+## Container Networking Issue (2025-09-28) ✅ RESOLVED
+- **Problem**: Container not accessible through external nginx proxy (502 Bad Gateway)
+- **Root Cause**: Docker container using bridge networking on port 3001, but external proxy expects host networking on port 80
+- **Solution Applied**:
+  - Updated docker-compose.yml to use `network_mode: host` instead of port mapping
+  - Removed `ports: - "3001:80"` configuration
+  - Container now runs directly on host port 80
+- **Status**: ✅ RESOLVED - External access via https://mlapi.us/cardcam/ working
 
 ## Troubleshooting
 

@@ -5,8 +5,7 @@ import { DetectionQuality } from '../../utils/CardDetectionSystem';
 interface DetectionOverlayProps {
   detections: CardDetection[];
   quality?: DetectionQuality;
-  canvasWidth: number;
-  canvasHeight: number;
+  videoElement: HTMLVideoElement | null;
   className?: string;
   confidenceThreshold?: number;
 }
@@ -14,8 +13,7 @@ interface DetectionOverlayProps {
 export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   detections,
   quality,
-  canvasWidth,
-  canvasHeight,
+  videoElement,
   className = 'detection-overlay',
   confidenceThreshold = 0.0,
 }) => {
@@ -23,60 +21,68 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !videoElement) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    const updateCanvasSize = () => {
+      // Get the actual rendered size of the video element (after CSS scaling)
+      const videoRect = videoElement.getBoundingClientRect();
+      const canvasWidth = videoRect.width;
+      const canvasHeight = videoRect.height;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      // Set canvas size to match the rendered video size
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
 
-    // Filter detections by confidence threshold
-    const filteredDetections = detections.filter(detection => detection.confidence >= confidenceThreshold);
+      // Clear canvas
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Debug canvas and detection info
-    if (filteredDetections.length > 0) {
-      console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} total detections, ${filteredDetections.length} after confidence filter (>=${confidenceThreshold})`);
-      console.log(`🖼️ Actual canvas element size: ${canvas.width}x${canvas.height}`);
-      console.log(`🖼️ Scale factors: scaleX=${(canvas.width / canvasWidth).toFixed(3)}, scaleY=${(canvas.height / canvasHeight).toFixed(3)}`);
-      
-      filteredDetections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
-        console.log(`  Detection ${index}:`, {
-          boundingBox: `x:${detection.boundingBox.x.toFixed(1)}, y:${detection.boundingBox.y.toFixed(1)}, w:${detection.boundingBox.width.toFixed(1)}, h:${detection.boundingBox.height.toFixed(1)}`,
-          corners: detection.corners ? detection.corners.map((c, i) => `C${i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ') : 'none',
-          confidence: detection.confidence.toFixed(3),
-          isRotated: detection.isRotated
-        });
+      // Filter detections by confidence threshold
+      const filteredDetections = detections.filter(detection => detection.confidence >= confidenceThreshold);
+
+      // Debug canvas and detection info
+      if (filteredDetections.length > 0) {
+        console.log(`🖼️ DetectionOverlay: Canvas ${canvasWidth}x${canvasHeight}, ${detections.length} total detections, ${filteredDetections.length} after confidence filter (>=${confidenceThreshold})`);
+        console.log(`🖼️ Video native size: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+        console.log(`🖼️ Video rendered size: ${canvasWidth}x${canvasHeight}`);
         
-        // Show what the coordinates will be after scaling to canvas
-        if (detection.corners && detection.corners.length >= 4) {
-          const scaleX = canvas.width / canvasWidth;
-          const scaleY = canvas.height / canvasHeight;
-          const scaledCorners = detection.corners.map((corner, i) => ({
-            i,
-            x: corner.x * scaleX,
-            y: corner.y * scaleY
-          }));
-          console.log(`    Final canvas corners: ${scaledCorners.map(c => `C${c.i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ')}`);
-          console.log(`    Canvas bounds: width=${canvas.width}, height=${canvas.height}`);
-        }
+        filteredDetections.slice(0, 1).forEach((detection, index) => { // Only show first detection for clarity
+          console.log(`  Detection ${index}:`, {
+            boundingBox: `x:${detection.boundingBox.x.toFixed(1)}, y:${detection.boundingBox.y.toFixed(1)}, w:${detection.boundingBox.width.toFixed(1)}, h:${detection.boundingBox.height.toFixed(1)}`,
+            corners: detection.corners ? detection.corners.map((c, i) => `C${i}:(${c.x.toFixed(1)},${c.y.toFixed(1)})`).join(' ') : 'none',
+            confidence: detection.confidence.toFixed(3),
+            isRotated: detection.isRotated
+          });
+        });
+      }
+
+      // Draw filtered detections
+      filteredDetections.forEach((detection, index) => {
+        drawDetection(ctx, detection, index === 0, quality, videoElement.videoWidth, videoElement.videoHeight);
       });
-    }
 
-    // Draw filtered detections
-    filteredDetections.forEach((detection, index) => {
-      drawDetection(ctx, detection, index === 0, quality, canvasWidth, canvasHeight);
-    });
+      // Draw positioning guides if we have filtered detections
+      if (filteredDetections.length > 0) {
+        drawPositioningGuides(ctx, canvasWidth, canvasHeight, quality);
+      }
+    };
 
-    // Draw positioning guides if we have filtered detections
-    if (filteredDetections.length > 0) {
-      drawPositioningGuides(ctx, canvasWidth, canvasHeight, quality);
-    }
-  }, [detections, quality, canvasWidth, canvasHeight, confidenceThreshold]);
+    // Initial render
+    updateCanvasSize();
+
+    // Add resize listener to handle window resizing
+    const handleResize = () => {
+      updateCanvasSize();
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [detections, quality, videoElement, confidenceThreshold]);
 
   return (
     <canvas

@@ -55,8 +55,7 @@ services:
   frontend:
     build: ./frontend
     container_name: card-scanner-frontend
-    ports:
-      - "3001:80"
+    network_mode: host
     restart: unless-stopped
     volumes:
       - ./frontend/public/models:/usr/share/nginx/html/models
