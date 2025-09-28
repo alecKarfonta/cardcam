@@ -59,7 +59,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
     // Draw detections
     detections.forEach((detection, index) => {
-      drawDetection(ctx, detection, index === 0, quality);
+      drawDetection(ctx, detection, index === 0, quality, canvasWidth, canvasHeight);
     });
 
     // Draw positioning guides if we have detections
@@ -89,7 +89,9 @@ function drawDetection(
   ctx: CanvasRenderingContext2D,
   detection: CardDetection,
   isPrimary: boolean,
-  quality?: DetectionQuality
+  quality: DetectionQuality | undefined,
+  videoWidth: number,
+  videoHeight: number
 ): void {
   const { boundingBox, confidence, corners, isRotated } = detection;
 
@@ -130,9 +132,9 @@ function drawDetection(
   if (isRotated && corners && corners.length === 4) {
     // Corners are already in image pixel coordinates from convertPredictionToDetections
     // We need to scale them to canvas coordinates
-    // canvasWidth/canvasHeight are the video dimensions, ctx.canvas.width/height are the actual canvas size
-    const scaleX = ctx.canvas.width / canvasWidth;
-    const scaleY = ctx.canvas.height / canvasHeight;
+    // videoWidth/videoHeight are the video dimensions, ctx.canvas.width/height are the actual canvas size
+    const scaleX = ctx.canvas.width / videoWidth;
+    const scaleY = ctx.canvas.height / videoHeight;
     
     const canvasCorners = corners.map(corner => ({
       x: corner.x * scaleX,
@@ -152,8 +154,8 @@ function drawDetection(
   } else {
     // Bounding box coordinates are already in image pixel coordinates from convertPredictionToDetections
     // Scale them to canvas coordinates
-    const scaleX = ctx.canvas.width / canvasWidth;
-    const scaleY = ctx.canvas.height / canvasHeight;
+    const scaleX = ctx.canvas.width / videoWidth;
+    const scaleY = ctx.canvas.height / videoHeight;
     
     const canvasX = boundingBox.x * scaleX;
     const canvasY = boundingBox.y * scaleY;
