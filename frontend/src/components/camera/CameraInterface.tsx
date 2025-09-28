@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useCamera } from '../../hooks/useCamera';
-import { useBackboneInference } from '../../hooks/useBackboneInference';
+import { useInference } from '../../hooks/useInference';
 import { DetectionOverlay } from './DetectionOverlay';
 import { CardDetectionSystem } from '../../utils/CardDetectionSystem';
 import './CameraInterface.css';
@@ -37,9 +37,8 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     isProcessing: isInferenceProcessing,
     lastResult,
     loadModel,
-    runInference,
-    updateNMSConfig
-  } = useBackboneInference();
+    runInference
+  } = useInference();
 
   // Capture current frame with detections for debugging
   const captureDebugFrame = () => {
@@ -185,13 +184,7 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
     modelLoadedRef.current = modelState.isLoaded;
   }, [modelState]);
 
-  // Update NMS config when confidence threshold changes
-  useEffect(() => {
-    if (modelState.isLoaded && updateNMSConfig) {
-      console.log(`🎯 Updating confidence threshold to ${confidenceThreshold}`);
-      updateNMSConfig({ confidenceThreshold });
-    }
-  }, [confidenceThreshold, modelState.isLoaded, updateNMSConfig]);
+  // Note: NMS config is now built into the ONNX model, no need to update dynamically
 
   // Attach video element when available
   useEffect(() => {
@@ -410,21 +403,10 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
       </div>
 
       {/* Confidence threshold slider */}
-      <div style={{ 
-        position: 'absolute', 
-        right: 8, 
-        bottom: 8, 
-        padding: '8px 12px', 
-        background: 'rgba(0,0,0,0.7)', 
-        color: '#fff', 
-        borderRadius: 6, 
-        fontSize: 12, 
-        zIndex: 10,
-        minWidth: 200
-      }}>
-        <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Confidence Filter</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, minWidth: 20 }}>0.0</span>
+      <div className="confidence-slider-container">
+        <div className="confidence-slider-title">Confidence Filter</div>
+        <div className="confidence-slider-controls">
+          <span className="confidence-slider-label">0.0</span>
           <input
             type="range"
             min="0"
@@ -432,23 +414,11 @@ export const CameraInterface: React.FC<CameraInterfaceProps> = ({
             step="0.05"
             value={confidenceThreshold}
             onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-            style={{
-              flex: 1,
-              height: 4,
-              background: '#333',
-              outline: 'none',
-              borderRadius: 2,
-              cursor: 'pointer'
-            }}
+            className="confidence-slider"
           />
-          <span style={{ fontSize: 10, minWidth: 20 }}>1.0</span>
+          <span className="confidence-slider-label">1.0</span>
         </div>
-        <div style={{ 
-          marginTop: 4, 
-          textAlign: 'center', 
-          fontSize: 11, 
-          color: '#ccc' 
-        }}>
+        <div className="confidence-value-display">
           {(confidenceThreshold * 100).toFixed(0)}%
         </div>
       </div>

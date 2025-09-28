@@ -113,3 +113,10 @@
 - **ONNX Runtime**: ✅ Version 1.23.0 with opset 18 support
 - **Debug Tool**: ✅ Available at http://localhost:3002/debug_onnx.html
 - **Root Cause**: RESOLVED - Now have complete OBB pipeline with modern opset
+
+## Latest Features (2025-09-28)
+- **Confidence Slider**: ✅ Added dynamic confidence threshold filter
+  - Real-time adjustment from 0% to 100% (step: 5%)
+  - Updates NMS processor configuration on-the-fly
+  - Styled to match camera interface design
+  - Mobile-responsive with touch-friendly controls

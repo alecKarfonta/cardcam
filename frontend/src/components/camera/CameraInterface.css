@@ -345,6 +345,110 @@
   border-width: 2px;
 }
 
+/* Confidence slider styling */
+.confidence-slider-container {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  z-index: 10;
+  min-width: 220px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.confidence-slider-container:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.confidence-slider-title {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  font-size: 13px;
+}
+
+.confidence-slider-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.confidence-slider-label {
+  font-size: 10px;
+  color: #ccc;
+  min-width: 24px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.confidence-slider {
+  flex: 1;
+  height: 6px;
+  background: linear-gradient(to right, #333, #666);
+  outline: none;
+  border-radius: 3px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: all 0.3s ease;
+}
+
+.confidence-slider:hover {
+  background: linear-gradient(to right, #444, #777);
+}
+
+.confidence-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.confidence-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.confidence-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.confidence-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.confidence-value-display {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2196F3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 /* Landscape mode adjustments */
 @media (orientation: landscape) and (max-height: 500px) {
   .camera-controls {
@@ -365,5 +469,42 @@
     top: 10px;
     right: 10px;
     font-size: 11px;
+  }
+
+  .confidence-slider-container {
+    right: 6px;
+    bottom: 6px;
+    padding: 8px 12px;
+    min-width: 180px;
+  }
+}
+
+/* Mobile optimizations for confidence slider */
+@media (max-width: 768px) {
+  .confidence-slider-container {
+    right: 6px;
+    bottom: 6px;
+    padding: 10px 12px;
+    min-width: 200px;
+    font-size: 11px;
+  }
+
+  .confidence-slider-title {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .confidence-slider {
+    height: 8px;
+  }
+
+  .confidence-slider::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  .confidence-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
   }
 }
