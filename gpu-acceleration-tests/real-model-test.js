@@ -74,9 +74,16 @@ class RealModelTester {
             
         } else if (provider === 'webgpu') {
             // WebGPU configuration
+            this.log(`🔍 ONNX Runtime WebGPU Environment Check:`);
+            this.log(`   ort.version: ${ort.version || 'unknown'}`);
+            this.log(`   ort.env.webgpu available: ${!!ort.env.webgpu}`);
+            this.log(`   Available providers: ${ort.env.availableProviders || 'unknown'}`);
+            
             if (ort.env.webgpu) {
                 ort.env.webgpu.validateInputContent = false;
-                this.log('WebGPU validation disabled for performance');
+                this.log('✅ WebGPU validation disabled for performance');
+            } else {
+                this.log('❌ ort.env.webgpu is not available - WebGPU support missing');
             }
             
         } else if (provider === 'webnn') {
@@ -176,11 +183,33 @@ class RealModelTester {
                 this.log(`Memory after loading: ${memAfter.used}MB/${memAfter.total}MB (Δ${memAfter.used - memBefore.used}MB)`);
             }
             
-            // Check actual execution provider
+            // Check actual execution provider - DETAILED ANALYSIS
             const sessionAny = this.session;
-            this.log(`Actual execution provider: ${sessionAny.executionProviders || 'unknown'}`);
+            const actualProviders = sessionAny.executionProviders || sessionAny._executionProviders || 'unknown';
+            const sessionHandler = sessionAny.handler || sessionAny._handler;
+            const backendType = sessionHandler?.backend?.backendType || sessionHandler?.backendType || 'unknown';
             
-            this.updateStatus(`Model loaded successfully with ${provider}`, 'success');
+            this.log(`🔍 EXECUTION PROVIDER ANALYSIS:`);
+            this.log(`   Requested providers: [${provider}, wasm, cpu]`);
+            this.log(`   Actual providers: ${JSON.stringify(actualProviders)}`);
+            this.log(`   Backend type: ${backendType}`);
+            this.log(`   Session handler keys: ${sessionHandler ? Object.keys(sessionHandler) : 'none'}`);
+            
+            // Detailed WebGPU check
+            if (provider === 'webgpu') {
+                const isActuallyWebGPU = backendType === 'webgpu' || 
+                                       (Array.isArray(actualProviders) && actualProviders.includes('webgpu')) ||
+                                       (typeof actualProviders === 'string' && actualProviders.includes('webgpu'));
+                
+                if (isActuallyWebGPU) {
+                    this.log(`✅ WebGPU: CONFIRMED - Actually using GPU acceleration`);
+                } else {
+                    this.log(`❌ WebGPU: FALLBACK DETECTED - Using ${backendType} instead of WebGPU`);
+                    this.log(`⚠️  This explains why performance is similar to WASM!`);
+                }
+            }
+            
+            this.updateStatus(`Model loaded with ${provider} (actual: ${backendType})`, 'success');
             return true;
             
         } catch (error) {
@@ -295,11 +324,15 @@ class RealModelTester {
         this.updateStatus(`Running inference with ${provider}...`, 'info');
         
         try {
-            if (!this.session) {
-                const loaded = await this.loadModel(provider);
-                if (!loaded) {
-                    throw new Error('Failed to load model');
-                }
+            // Always reload model to test different providers properly
+            if (this.session) {
+                await this.session.release();
+                this.session = null;
+            }
+            
+            const loaded = await this.loadModel(provider);
+            if (!loaded) {
+                throw new Error('Failed to load model');
             }
             
             // Load test image
