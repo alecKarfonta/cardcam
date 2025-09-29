@@ -352,6 +352,33 @@ add_header Cross-Origin-Opener-Policy "same-origin" always;
 
 ---
 
+## Standalone GPU Acceleration Test Suite
+
+**NEW**: Created a comprehensive standalone test environment at `/gpu-acceleration-tests/` to systematically explore GPU acceleration options:
+
+### Test Suite Features
+- **System Information Detection**: Browser, GPU, CPU, memory analysis
+- **WebGPU Testing**: Basic API, compute shaders, ONNX integration with non-blocking approaches
+- **WebNN Testing**: Browser API exploration, context creation, operation support
+- **WASM Baseline**: Single/multi-threaded performance, SIMD acceleration
+- **Comprehensive Benchmarking**: Performance comparison, stability analysis, recommendations
+
+### Key Improvements Over Previous Attempts
+1. **Non-blocking WebGPU**: Uses requestAnimationFrame and timeouts to prevent browser lockups
+2. **Detailed Error Handling**: Comprehensive logging and graceful degradation
+3. **Systematic Testing**: Isolated test modules for each acceleration method
+4. **Performance Analysis**: Benchmarking with multiple input sizes and stability testing
+5. **Easy Deployment**: Docker setup with proper cross-origin isolation headers
+
+### Usage
+```bash
+cd gpu-acceleration-tests
+docker-compose up --build
+# Open http://localhost:8080
+```
+
+---
+
 ## Conclusion
 
 **GPU acceleration in browsers for ML inference is currently not viable** for production applications. The combination of:
@@ -366,5 +393,11 @@ Makes CPU-based optimization the only reliable approach. Our **optimized multi-t
 - **100% reliability** with no browser lockups
 - **Maintained UI responsiveness** during inference
 - **Cross-platform compatibility** across all modern browsers
+
+The **standalone test suite** provides a systematic way to:
+- **Verify these findings** on different systems and browsers
+- **Monitor progress** as WebGPU and WebNN mature
+- **Benchmark new approaches** as they become available
+- **Test production models** in an isolated environment
 
 This represents the **current state-of-the-art** for browser-based ML inference until GPU acceleration technologies mature.
