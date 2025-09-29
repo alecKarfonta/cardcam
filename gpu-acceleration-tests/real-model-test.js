@@ -54,8 +54,8 @@ class RealModelTester {
     setupONNXRuntime(provider = 'wasm') {
         this.log(`Setting up ONNX Runtime for ${provider.toUpperCase()}...`);
         
-        // Base configuration
-        const base = '/onnx/';
+        // Base configuration - use absolute path
+        const base = window.location.origin + '/onnx/';
         ort.env.wasm.wasmPaths = base;
         
         if (provider === 'wasm' || provider === 'cpu') {
