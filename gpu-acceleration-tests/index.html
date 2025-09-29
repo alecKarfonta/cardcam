@@ -294,6 +294,11 @@
         </div>
     </div>
 
+    <!-- Load ONNX Runtime first -->
+    <script src="/onnx/ort.min.js"></script>
+    
+    <!-- Load test modules in dependency order -->
+    <script src="test-model.js"></script>
     <script src="system-info.js"></script>
     <script src="webgpu-tests.js"></script>
     <script src="webnn-tests.js"></script>

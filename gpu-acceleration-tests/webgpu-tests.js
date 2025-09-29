@@ -47,16 +47,24 @@ class WebGPUTester {
             this.log('Initializing WebGPU...');
             
             if (!('gpu' in navigator)) {
-                throw new Error('WebGPU not supported in this browser');
+                throw new Error('WebGPU not supported in this browser - navigator.gpu not available');
             }
 
-            this.log('Requesting WebGPU adapter...');
-            this.adapter = await navigator.gpu.requestAdapter({
+            this.log('WebGPU API detected, requesting adapter...');
+            
+            // Add timeout for adapter request
+            const adapterPromise = navigator.gpu.requestAdapter({
                 powerPreference: 'high-performance'
             });
+            
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('WebGPU adapter request timeout')), 10000);
+            });
+            
+            this.adapter = await Promise.race([adapterPromise, timeoutPromise]);
 
             if (!this.adapter) {
-                throw new Error('No WebGPU adapter available');
+                throw new Error('No WebGPU adapter available - GPU may not support WebGPU or drivers are outdated');
             }
 
             this.log(`Adapter found: ${this.adapter.info?.vendor || 'Unknown vendor'}`);
@@ -93,6 +101,15 @@ class WebGPUTester {
         this.updateStatus('Running basic WebGPU test...', 'info');
 
         try {
+            this.log('Checking WebGPU browser support...');
+            
+            // First check if WebGPU is available at all
+            if (!('gpu' in navigator)) {
+                throw new Error('WebGPU not available - browser does not support WebGPU API');
+            }
+            
+            this.log('✅ navigator.gpu is available');
+            
             const initialized = await this.initialize();
             if (!initialized) {
                 throw new Error('WebGPU initialization failed');
