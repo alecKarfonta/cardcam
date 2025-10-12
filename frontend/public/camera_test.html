@@ -210,11 +210,11 @@
 
             try {
                 statusText.textContent = 'Loading model...';
-                console.log('Loading model with WebGPU...');
+                console.log('Loading model with WebGPU ONLY (no fallback)...');
 
                 const startTime = performance.now();
                 session = await ort.InferenceSession.create('/models/trading_card_detector.onnx', {
-                    executionProviders: ['webgpu', 'wasm'],
+                    executionProviders: ['webgpu'],
                     graphOptimizationLevel: 'all'
                 });
 
@@ -222,13 +222,14 @@
                 console.log(`Model loaded in ${loadTime.toFixed(2)}ms`);
                 
                 statusText.textContent = 'Model ready - Click Start Auto or Run Once';
-                providerEl.textContent = 'WebGPU/WASM';
+                providerEl.textContent = 'WebGPU';
                 
                 runOnceBtn.disabled = false;
                 autoModeBtn.disabled = false;
             } catch (error) {
                 statusText.textContent = `Model load error: ${error.message}`;
                 console.error('Model load error:', error);
+                console.error('Full error stack:', error.stack);
             }
         }
 
@@ -294,11 +295,7 @@
                 const inferenceMs = performance.now() - inferenceStart;
 
                 inferenceTimeEl.textContent = `${inferenceMs.toFixed(0)}ms`;
-                if (inferenceMs < 250) {
-                    providerEl.textContent = '🚀 WebGPU';
-                } else {
-                    providerEl.textContent = 'WASM';
-                }
+                providerEl.textContent = 'WebGPU';
 
                 const boxes = results[session.outputNames[0]].data;
                 const scores = results[session.outputNames[1]].data;

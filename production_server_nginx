@@ -1,0 +1,482 @@
+# This configuration file is running on another machine (192.168.1.196) that has the domain https://mlapi.us points at it
+# This nginx then points traffic from http://mlapi.us/cardcam at this local machine (192.168.1.77)
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name mlapi.us;
+    client_max_body_size 2048M;
+
+    ssl_certificate /etc/letsencrypt/live/mlapi.us/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mlapi.us/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers (applied to all responses by default)
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    
+    # CSP: Allow blob: and data: for WebGPU/WASM workers
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' wss: ws: https:; media-src 'self' blob:;" always;
+
+    # ========================================================================
+    # CARDCAM FRONTEND - PROXY TO PRODUCTION CONTAINER
+    # ========================================================================
+    
+    # Proxy React app to production container (nginx + React build)
+    # Use ^~ to stop searching for regex matches - this takes priority over /static/ and other locations
+    # Strip /cardcam prefix before forwarding (trailing slash in proxy_pass does this)
+    location ^~ /cardcam/ {
+        proxy_pass http://192.168.1.77:3001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cross-origin isolation required for WebGPU/SharedArrayBuffer
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+    }
+    
+    # Handle exact /cardcam without trailing slash
+    location = /cardcam {
+        return 301 /cardcam/;
+    }
+
+    location /vllm/ {
+        proxy_pass http://192.168.1.77:8600/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+    location /d2/_next/ {
+        proxy_pass http://192.168.1.196:666/d2/_next/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cache static assets
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Handle data files (keep /d2 prefix)  
+    location /d2/data/ {
+        proxy_pass http://192.168.1.196:666/d2/data/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Handle favicon
+    location /d2/favicon.ico {
+        proxy_pass http://192.168.1.196:666/d2/favicon.ico;
+        proxy_set_header Host $host;
+    }
+
+    # Handle exact /d2 path (no trailing slash)
+    location = /d2 {
+        proxy_pass http://192.168.1.196:666/d2;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support for development
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+
+    # Handle all other /d2 routes (keep /d2 prefix)
+    location /d2/ {
+        proxy_pass http://192.168.1.196:666/d2/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support for development
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+
+    location /chat_api/v1/ {
+        proxy_pass http://192.168.1.196:5005/api/v1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    location /chat_swagger/ {
+        proxy_pass http://192.168.1.196:5005/swagger/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # API proxy
+    location /api/v1/ {
+        proxy_pass http://192.168.1.196:8681/api/v1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    location /streamer-tools {
+        proxy_pass http://192.168.1.196:5173;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 86400;
+    }
+
+    location /tts/ {
+        proxy_pass http://192.168.1.196:9981/tts/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Add headers for audio handling
+        proxy_set_header Accept-Encoding "";
+        proxy_set_header Accept "*/*";
+        proxy_set_header Content-Type "application/json";
+
+        # Increase timeouts for audio processing
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # Also add a location for /voices
+    location /voices/ {
+        proxy_pass http://192.168.1.196:9981/voices/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Increase timeouts for voice uploads
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # STL API proxy (more specific path first)
+    location /stl/api/ {
+        proxy_pass http://192.168.1.196:8116/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # STL frontend proxy
+    location /plateforge/ {
+        proxy_pass http://192.168.1.196:3017/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # STL API proxy
+    location /stl-api/ {
+        proxy_pass http://192.168.1.196:8116/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # Stocker API - must come before the general /stocker/ location
+    location /stocker/api/ {
+        proxy_pass http://localhost:8734/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # Stocker frontend
+    location /stocker/ {
+        proxy_pass http://192.168.1.196:3036/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # Media files location
+    location /media/processed/ {
+        alias /home/alec/git/streamer-tools/uploader/data/videos/;
+        add_header Content-Disposition "attachment";
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range";
+
+        # Enable directory listing for debugging
+        autoindex on;
+        
+        # Set proper MIME types
+        types {
+            video/mp4 mp4;
+        }
+        
+        # Ensure nginx can read the files
+        userid on;
+        userid_name uid;
+        userid_path /var/lib/nginx/userid;
+    }
+
+
+    # walker frontend
+    location /walker/ {
+        proxy_pass http://192.168.1.196:7777/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+    # walker frontend
+    location /walker_api/ {
+        proxy_pass http://192.168.1.196:7777/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+
+    
+    # Stocker WebSocket endpoints for prediction status
+    location /stocker/ws/ {
+        proxy_pass http://localhost:8734/ws/;
+    	proxy_http_version 1.1;
+    	proxy_set_header Upgrade $http_upgrade;
+    	proxy_set_header Connection "upgrade";
+    	proxy_set_header Host $host;
+    	proxy_set_header X-Real-IP $remote_addr;
+    	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    	proxy_set_header X-Forwarded-Proto $scheme;
+    
+    	# WebSocket specific settings
+    	proxy_read_timeout 86400;
+    	proxy_send_timeout 86400;
+    	proxy_connect_timeout 300;
+    
+    	# Disable buffering for real-time communication
+    	proxy_buffering off;
+    	proxy_cache off;
+    }
+
+    location /stocker/sse/ {
+       proxy_pass http://localhost:8734/sse/;
+       proxy_buffering off;  # Essential for real-time streaming
+       proxy_cache off;      # No caching for live data
+       proxy_read_timeout 300s;  # Longer timeout for streams
+   }
+
+   location /streamsync {
+        proxy_pass http://192.168.1.13:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    } 
+
+    # graphrag frontend
+    location /graphrag/ {
+        proxy_pass http://192.168.1.196:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # graphrag static assets
+    location /static/ {
+        proxy_pass http://192.168.1.196:3000/static/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for static assets
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+    # graphrag favicon
+    location /favicon.ico {
+        proxy_pass http://192.168.1.196:3000/favicon.ico;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # graphrag manifest
+    location /manifest.json {
+        proxy_pass http://192.168.1.196:3000/manifest.json;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # graphrag logo files
+    location /logo192.png {
+        proxy_pass http://192.168.1.196:3000/logo192.png;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /logo512.png {
+        proxy_pass http://192.168.1.196:3000/logo512.png;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+
+
+    # graphrag backend
+    location ~ ^/graphrag/api/(.*)$ {
+        proxy_pass http://192.168.1.196:8000/$1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Settings for large file uploads
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+
+
+    # Handle root requests - proxy to frontend
+    # This MUST come LAST so other locations match first
+    location / {
+        proxy_pass http://192.168.1.77:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # CRITICAL: Re-add cross-origin isolation headers in location block
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+    }
+
+    # Security for sensitive files
+    location ~ /\. {
+        deny all;
+    }
+}
+
+server {
+    listen 9980;
+    listen [::]:9980;
+    server_name mlapi.us;
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
