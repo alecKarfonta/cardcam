@@ -44,6 +44,15 @@ class BoundingBoxEditor {
         this.onBboxChanged = null;
         this.onBboxSelected = null;
         
+        // Store bound event handlers for proper cleanup
+        this.boundHandlers = {
+            mousedown: this.handleMouseDown.bind(this),
+            mousemove: this.handleMouseMove.bind(this),
+            mouseup: this.handleMouseUp.bind(this),
+            mouseleave: this.handleMouseLeave.bind(this),
+            wheel: this.handleWheel.bind(this)
+        };
+        
         this.setupEventListeners();
     }
 
@@ -61,11 +70,35 @@ class BoundingBoxEditor {
      * Setup mouse event listeners
      */
     setupEventListeners() {
-        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('mouseleave', this.handleMouseLeave.bind(this));
-        this.canvas.addEventListener('wheel', this.handleWheel.bind(this));
+        console.log('BoundingBoxEditor: Setting up event listeners on canvas', this.canvas);
+        this.canvas.addEventListener('mousedown', this.boundHandlers.mousedown);
+        this.canvas.addEventListener('mousemove', this.boundHandlers.mousemove);
+        this.canvas.addEventListener('mouseup', this.boundHandlers.mouseup);
+        this.canvas.addEventListener('mouseleave', this.boundHandlers.mouseleave);
+        this.canvas.addEventListener('wheel', this.boundHandlers.wheel);
+        console.log('BoundingBoxEditor: Event listeners attached');
+    }
+
+    /**
+     * Remove event listeners and clean up resources
+     */
+    destroy() {
+        if (this.canvas && this.boundHandlers) {
+            this.canvas.removeEventListener('mousedown', this.boundHandlers.mousedown);
+            this.canvas.removeEventListener('mousemove', this.boundHandlers.mousemove);
+            this.canvas.removeEventListener('mouseup', this.boundHandlers.mouseup);
+            this.canvas.removeEventListener('mouseleave', this.boundHandlers.mouseleave);
+            this.canvas.removeEventListener('wheel', this.boundHandlers.wheel);
+        }
+        
+        // Clear references
+        this.canvas = null;
+        this.ctx = null;
+        this.imageElement = null;
+        this.trainingExample = null;
+        this.boundHandlers = null;
+        this.onBboxChanged = null;
+        this.onBboxSelected = null;
     }
 
     /**
@@ -112,7 +145,15 @@ class BoundingBoxEditor {
         // Check in reverse order (top to bottom in z-order)
         for (let i = this.trainingExample.boundingBoxes.length - 1; i >= 0; i--) {
             const bbox = this.trainingExample.boundingBoxes[i];
-            if (bbox.containsPoint(normX, normY)) {
+            const contains = bbox.containsPoint(normX, normY);
+            console.log(`findBboxAtPoint: Checking bbox ${i}`, {
+                bboxCenter: { x: bbox.x, y: bbox.y },
+                bboxSize: { width: bbox.width, height: bbox.height },
+                rotation: bbox.rotation,
+                clickPoint: { x: normX, y: normY },
+                contains: contains
+            });
+            if (contains) {
                 return i;
             }
         }
@@ -159,13 +200,42 @@ class BoundingBoxEditor {
      * Handle mouse down event
      */
     handleMouseDown(e) {
-        if (!this.trainingExample) return;
+        console.log('BoundingBoxEditor: mousedown event', { 
+            clientX: e.clientX, 
+            clientY: e.clientY,
+            target: e.target
+        });
+        
+        if (!this.trainingExample) {
+            console.warn('BoundingBoxEditor: No training example loaded');
+            return;
+        }
+
+        console.log('BoundingBoxEditor: Image bounds', {
+            imageDrawX: this.imageDrawX,
+            imageDrawY: this.imageDrawY,
+            imageDrawWidth: this.imageDrawWidth,
+            imageDrawHeight: this.imageDrawHeight
+        });
 
         const { x, y } = this.canvasToNormalized(e.clientX, e.clientY);
+        console.log('BoundingBoxEditor: Click at normalized coords', { x, y });
+        
+        // Log all bounding boxes for comparison
+        console.log('BoundingBoxEditor: Available bboxes:', 
+            this.trainingExample.boundingBoxes.map((bbox, i) => ({
+                index: i,
+                x: bbox.x,
+                y: bbox.y,
+                width: bbox.width,
+                height: bbox.height
+            }))
+        );
         
         // Check if clicking on a handle
         const handle = this.findHandleAtPoint(x, y);
         if (handle) {
+            console.log('BoundingBoxEditor: Found handle', handle);
             if (handle.type === 'rotation') {
                 this.isRotating = true;
             } else {
@@ -180,7 +250,10 @@ class BoundingBoxEditor {
 
         // Check if clicking on a bounding box
         const bboxIndex = this.findBboxAtPoint(x, y);
+        console.log('BoundingBoxEditor: findBboxAtPoint returned', bboxIndex);
+        
         if (bboxIndex !== -1) {
+            console.log('BoundingBoxEditor: Selected bbox', bboxIndex);
             this.selectedBboxIndex = bboxIndex;
             this.isDragging = true;
             this.dragStartX = x;
@@ -193,6 +266,7 @@ class BoundingBoxEditor {
             
             this.render();
         } else {
+            console.log('BoundingBoxEditor: No bbox found at click point, deselecting');
             this.selectedBboxIndex = -1;
             this.render();
         }
@@ -341,6 +415,7 @@ class BoundingBoxEditor {
             this.imageDrawY = 0;
             this.imageDrawWidth = this.canvas.width;
             this.imageDrawHeight = this.canvas.height;
+            console.warn('calculateImageBounds: Image not loaded, using canvas dimensions');
             return;
         }
 
@@ -360,6 +435,13 @@ class BoundingBoxEditor {
             this.imageDrawY = 0;
             this.imageDrawX = (this.canvas.width - this.imageDrawWidth) / 2;
         }
+        
+        console.log('calculateImageBounds:', {
+            imageDrawX: this.imageDrawX,
+            imageDrawY: this.imageDrawY,
+            imageDrawWidth: this.imageDrawWidth,
+            imageDrawHeight: this.imageDrawHeight
+        });
     }
 
     /**
@@ -513,6 +595,23 @@ class BoundingBoxEditor {
     getSelectedBoundingBox() {
         if (this.selectedBboxIndex === -1 || !this.trainingExample) return null;
         return this.trainingExample.boundingBoxes[this.selectedBboxIndex];
+    }
+
+    /**
+     * Programmatically select a bounding box by index
+     */
+    selectBoundingBox(index) {
+        if (!this.trainingExample) return;
+        
+        if (index >= 0 && index < this.trainingExample.boundingBoxes.length) {
+            this.selectedBboxIndex = index;
+            
+            if (this.onBboxSelected) {
+                this.onBboxSelected(index);
+            }
+            
+            this.render();
+        }
     }
 
     /**

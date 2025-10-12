@@ -11,6 +11,7 @@ class DatasetViewer {
         this.datasetManager = datasetManager;
         this.editor = null;
         this.currentExampleId = null;
+        this.savedScrollPosition = 0;
         
         this.render();
     }
@@ -19,6 +20,15 @@ class DatasetViewer {
      * Render the complete UI
      */
     render() {
+        // Save scroll position of examples list before re-rendering
+        const examplesList = document.getElementById('examplesList');
+        if (examplesList) {
+            this.savedScrollPosition = examplesList.scrollTop;
+        }
+        
+        // Clean up old editor before destroying DOM
+        this.cleanupEditor();
+
         this.container.innerHTML = `
             <div class="dataset-viewer">
                 <div class="dataset-header">
@@ -54,6 +64,22 @@ class DatasetViewer {
 
         this.attachEventListeners();
         this.initializeEditor();
+        
+        // Restore scroll position after rendering
+        this.restoreScrollPosition();
+    }
+
+    /**
+     * Restore scroll position of examples list
+     */
+    restoreScrollPosition() {
+        // Use requestAnimationFrame to ensure DOM has been rendered
+        requestAnimationFrame(() => {
+            const examplesList = document.getElementById('examplesList');
+            if (examplesList && this.savedScrollPosition > 0) {
+                examplesList.scrollTop = this.savedScrollPosition;
+            }
+        });
     }
 
     /**
@@ -134,7 +160,10 @@ class DatasetViewer {
                  data-example-id="${example.id}"
                  data-example-index="${index}">
                 <div class="example-thumbnail">
-                    <img src="${example.imageData}" alt="Example ${index + 1}">
+                    <img src="${example.imageData}" 
+                         alt="Example ${index + 1}"
+                         loading="lazy"
+                         decoding="async">
                     <div class="example-overlay">
                         <span class="bbox-count">${example.boundingBoxes.length} boxes</span>
                     </div>
@@ -278,18 +307,35 @@ class DatasetViewer {
      * Initialize the bounding box editor
      */
     initializeEditor() {
-        if (!this.currentExampleId) return;
+        if (!this.currentExampleId) {
+            console.warn('initializeEditor: No current example ID');
+            return;
+        }
 
         const canvas = document.getElementById('editorCanvas');
         const image = document.getElementById('editorImage');
         
-        if (!canvas || !image) return;
+        if (!canvas) {
+            console.error('initializeEditor: Canvas element not found');
+            return;
+        }
+        
+        if (!image) {
+            console.error('initializeEditor: Image element not found');
+            return;
+        }
 
-        // Wait for image to load
-        image.onload = () => {
+        // Function to initialize the editor once image is ready
+        const initEditor = () => {
             // Set canvas size to match image aspect ratio
             const maxWidth = 640;
             const maxHeight = 480;
+            
+            if (!image.naturalWidth || !image.naturalHeight) {
+                console.error('initializeEditor: Image has no natural dimensions');
+                return;
+            }
+            
             const imgAspect = image.naturalWidth / image.naturalHeight;
             const containerAspect = maxWidth / maxHeight;
 
@@ -301,10 +347,18 @@ class DatasetViewer {
                 canvas.width = maxHeight * imgAspect;
             }
 
+            console.log('Creating BoundingBoxEditor', { canvasWidth: canvas.width, canvasHeight: canvas.height });
+            
             this.editor = new BoundingBoxEditor(canvas, image);
             
             const example = this.datasetManager.getExample(this.currentExampleId);
+            if (!example) {
+                console.error('initializeEditor: Example not found', this.currentExampleId);
+                return;
+            }
+            
             this.editor.loadExample(example);
+            console.log('Editor loaded with example', { id: example.id, bboxCount: example.boundingBoxes.length });
 
             // Set up callbacks
             this.editor.onBboxChanged = async (index, bbox) => {
@@ -316,12 +370,34 @@ class DatasetViewer {
             this.editor.onBboxSelected = (index) => {
                 this.updateBboxProperties();
                 this.highlightBboxInList(index);
-                document.getElementById('deleteBboxBtn').disabled = false;
-                document.getElementById('duplicateBboxBtn').disabled = false;
+                const deleteBboxBtn = document.getElementById('deleteBboxBtn');
+                const duplicateBboxBtn = document.getElementById('duplicateBboxBtn');
+                if (deleteBboxBtn) deleteBboxBtn.disabled = false;
+                if (duplicateBboxBtn) duplicateBboxBtn.disabled = false;
             };
 
             this.setupEditorEventListeners();
+            console.log('Editor initialization complete');
         };
+
+        // Check if image is already loaded (cached)
+        if (image.complete && image.naturalWidth > 0) {
+            console.log('initializeEditor: Image already loaded, initializing immediately');
+            // Image is already loaded - use setTimeout to ensure any pending operations complete
+            setTimeout(() => initEditor(), 0);
+        } else {
+            console.log('initializeEditor: Waiting for image to load');
+            // Wait for image to load
+            image.onload = () => {
+                console.log('initializeEditor: Image loaded');
+                initEditor();
+            };
+            
+            // Handle load errors
+            image.onerror = () => {
+                console.error('Failed to load editor image');
+            };
+        }
     }
 
     /**
@@ -373,10 +449,29 @@ class DatasetViewer {
         if (closeEditorBtn) {
             closeEditorBtn.addEventListener('click', () => {
                 this.currentExampleId = null;
-                this.editor = null;
-                this.render();
+                this.cleanupEditor();
+                
+                // Update selection state in list
+                document.querySelectorAll('.example-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                
+                // Update editor panel to show empty state
+                this.updateEditorPanel();
             });
         }
+
+        // Setup click handlers for bbox list items
+        const bboxItems = document.querySelectorAll('.bbox-item');
+        bboxItems.forEach((item, index) => {
+            item.addEventListener('click', () => {
+                if (this.editor) {
+                    this.editor.selectBoundingBox(index);
+                    this.highlightBboxInList(index);
+                    this.updateBboxProperties();
+                }
+            });
+        });
 
         // Setup property input listeners
         this.setupPropertyInputListeners();
@@ -509,7 +604,59 @@ class DatasetViewer {
      */
     editExample(exampleId) {
         this.currentExampleId = exampleId;
-        this.render();
+        
+        // Update selection state in list without full re-render
+        document.querySelectorAll('.example-card').forEach(card => {
+            if (card.dataset.exampleId === exampleId) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+        
+        // Update only the editor panel
+        this.updateEditorPanel();
+    }
+
+    /**
+     * Update only the editor panel without re-rendering the examples list
+     */
+    updateEditorPanel() {
+        const editorContainer = document.getElementById('exampleEditor');
+        if (!editorContainer) return;
+        
+        // Clean up old editor first
+        this.cleanupEditor();
+        
+        // Update editor HTML
+        editorContainer.innerHTML = this.renderEditor();
+        
+        // Initialize new editor after DOM has updated
+        // Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+            this.initializeEditor();
+        });
+    }
+
+    /**
+     * Clean up the current editor and its resources
+     */
+    cleanupEditor() {
+        if (this.editor) {
+            // Call destroy method to remove event listeners properly
+            if (typeof this.editor.destroy === 'function') {
+                this.editor.destroy();
+            }
+            
+            // Clear editor reference
+            this.editor = null;
+        }
+        
+        // Remove image onload handler
+        const image = document.getElementById('editorImage');
+        if (image) {
+            image.onload = null;
+        }
     }
 
     /**

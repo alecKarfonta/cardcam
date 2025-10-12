@@ -6,8 +6,8 @@
     <title>WebGPU Camera Test</title>
     <!-- ONNX Runtime WebGPU build -->
     <script src="onnx/ort.webgpu.min.js"></script>
-    <!-- ByteTrack object tracking -->
-    <script src="bytetrack.js"></script>
+    <!-- Multi-Algorithm Object Tracking -->
+    <script src="object_tracking.js"></script>
     <!-- Dataset Management System -->
     <script src="dataset-storage.js"></script>
     <script src="dataset-manager.js"></script>
@@ -45,17 +45,27 @@
             position: relative;
             width: 100%;
             max-width: min(90vw, 1280px);
-            aspect-ratio: 4 / 3;
             margin: 0 auto clamp(10px, 2vh, 20px);
             border: 2px solid #00ff00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
         }
         
-        video, canvas {
+        video {
+            max-width: 100%;
+            max-height: 80vh;
+            width: auto;
+            height: auto;
+            display: block;
+        }
+        
+        canvas {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            pointer-events: none;
         }
         
         #overlayCanvas {
@@ -260,7 +270,6 @@
             
             #videoContainer {
                 max-width: min(60vw, 1280px);
-                aspect-ratio: 16 / 9;
             }
             
             .container {
@@ -404,9 +413,19 @@
                 <input type="checkbox" id="includeOverlay" checked>
                 Include visualization with bounding boxes
             </label>
-            <label style="cursor: pointer;">
+            <label style="cursor: pointer; margin-right: 20px;">
                 <input type="checkbox" id="enableTracking">
-                Enable Object Tracking (ByteTrack)
+                Enable Object Tracking
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 8px;">
+                <span>Algorithm:</span>
+                <select id="trackerType" style="padding: 8px; font-family: monospace; background: #2a2a2a; color: #00ff00; border: 2px solid #00ff00; border-radius: 4px; cursor: pointer;">
+                    <option value="bytetrack">ByteTrack</option>
+                    <option value="sort">SORT</option>
+                    <option value="deepsort">DeepSORT</option>
+                    <option value="iou">IoU Tracker</option>
+                    <option value="centroid">Centroid Tracker</option>
+                </select>
             </label>
         </div>
 
@@ -421,73 +440,237 @@
             <div class="detection-count" id="detectionCount">0 / 0 cards shown</div>
         </div>
 
-        <div class="tracking-params" id="trackingParams">
+        <!-- ByteTrack Parameters -->
+        <div class="tracking-params" id="bytetrackParams" data-tracker="bytetrack">
             <h3>ByteTrack Parameters</h3>
             
             <div class="param-group">
                 <div class="param-label">
                     <span>High Confidence Threshold</span>
-                    <span class="param-value" id="trackHighThreshValue">60%</span>
+                    <span class="param-value" id="bt_trackHighThreshValue">60%</span>
                 </div>
                 <div class="param-description">
                     Detections above this confidence are prioritized for first-stage matching. Higher values = more selective.
                 </div>
-                <input type="range" class="param-slider" id="trackHighThresh" min="0.3" max="0.95" step="0.05" value="0.6">
+                <input type="range" class="param-slider" id="bt_trackHighThresh" min="0.3" max="0.95" step="0.05" value="0.6">
             </div>
 
             <div class="param-group">
                 <div class="param-label">
                     <span>Low Confidence Threshold</span>
-                    <span class="param-value" id="trackLowThreshValue">30%</span>
+                    <span class="param-value" id="bt_trackLowThreshValue">30%</span>
                 </div>
                 <div class="param-description">
                     Minimum confidence for second-stage matching. Helps recover temporarily low-confidence detections of existing tracks.
                 </div>
-                <input type="range" class="param-slider" id="trackLowThresh" min="0.1" max="0.6" step="0.05" value="0.3">
+                <input type="range" class="param-slider" id="bt_trackLowThresh" min="0.1" max="0.6" step="0.05" value="0.3">
             </div>
 
             <div class="param-group">
                 <div class="param-label">
                     <span>New Track Threshold</span>
-                    <span class="param-value" id="newTrackThreshValue">70%</span>
+                    <span class="param-value" id="bt_newTrackThreshValue">70%</span>
                 </div>
                 <div class="param-description">
                     Minimum confidence required to start tracking a new object. Higher values prevent false positives from creating tracks.
                 </div>
-                <input type="range" class="param-slider" id="newTrackThresh" min="0.4" max="0.95" step="0.05" value="0.7">
+                <input type="range" class="param-slider" id="bt_newTrackThresh" min="0.4" max="0.95" step="0.05" value="0.7">
             </div>
 
             <div class="param-group">
                 <div class="param-label">
                     <span>Match Threshold (IoU)</span>
-                    <span class="param-value" id="matchThreshValue">0.80</span>
+                    <span class="param-value" id="bt_matchThreshValue">0.80</span>
                 </div>
                 <div class="param-description">
                     Minimum Intersection-over-Union to match a detection to an existing track. Higher values = stricter matching (0.0-1.0).
                 </div>
-                <input type="range" class="param-slider" id="matchThresh" min="0.3" max="0.95" step="0.05" value="0.8">
+                <input type="range" class="param-slider" id="bt_matchThresh" min="0.3" max="0.95" step="0.05" value="0.8">
             </div>
 
             <div class="param-group">
                 <div class="param-label">
                     <span>Max Age (frames)</span>
-                    <span class="param-value" id="maxAgeValue">30</span>
+                    <span class="param-value" id="bt_maxAgeValue">30</span>
                 </div>
                 <div class="param-description">
                     Number of frames a track can persist without a matched detection before being deleted. Higher = more tolerant of occlusion.
                 </div>
-                <input type="range" class="param-slider" id="maxAge" min="5" max="60" step="5" value="30">
+                <input type="range" class="param-slider" id="bt_maxAge" min="5" max="60" step="5" value="30">
             </div>
 
             <div class="param-group">
                 <div class="param-label">
                     <span>Minimum Hits</span>
-                    <span class="param-value" id="minHitsValue">3</span>
+                    <span class="param-value" id="bt_minHitsValue">3</span>
                 </div>
                 <div class="param-description">
                     Number of consecutive detections required before a track is confirmed and displayed. Higher = fewer false positives.
                 </div>
-                <input type="range" class="param-slider" id="minHits" min="1" max="10" step="1" value="3">
+                <input type="range" class="param-slider" id="bt_minHits" min="1" max="10" step="1" value="3">
+            </div>
+        </div>
+
+        <!-- SORT Parameters -->
+        <div class="tracking-params" id="sortParams" data-tracker="sort">
+            <h3>SORT Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="sort_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum Intersection-over-Union for matching detections to tracks. Higher values = stricter matching.
+                </div>
+                <input type="range" class="param-slider" id="sort_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="sort_maxAgeValue">1</span>
+                </div>
+                <div class="param-description">
+                    Number of frames a track can exist without a match. SORT uses short max age for fast recovery.
+                </div>
+                <input type="range" class="param-slider" id="sort_maxAge" min="1" max="10" step="1" value="1">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="sort_minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Number of consecutive detections required before displaying a track. Reduces false positives.
+                </div>
+                <input type="range" class="param-slider" id="sort_minHits" min="1" max="10" step="1" value="3">
+            </div>
+        </div>
+
+        <!-- DeepSORT Parameters -->
+        <div class="tracking-params" id="deepsortParams" data-tracker="deepsort">
+            <h3>DeepSORT Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="ds_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum IoU for spatial matching after appearance matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Cosine Distance</span>
+                    <span class="param-value" id="ds_maxCosineDistanceValue">0.20</span>
+                </div>
+                <div class="param-description">
+                    Maximum appearance feature distance for matching. Lower = more strict appearance matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_maxCosineDistance" min="0.05" max="0.5" step="0.05" value="0.2">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="ds_maxAgeValue">30</span>
+                </div>
+                <div class="param-description">
+                    Frames a track persists without detection. DeepSORT uses long max age for occlusion handling.
+                </div>
+                <input type="range" class="param-slider" id="ds_maxAge" min="5" max="100" step="5" value="30">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="ds_minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Consecutive detections needed before confirming a track.
+                </div>
+                <input type="range" class="param-slider" id="ds_minHits" min="1" max="10" step="1" value="3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>NN Budget</span>
+                    <span class="param-value" id="ds_nnBudgetValue">100</span>
+                </div>
+                <div class="param-description">
+                    Maximum number of appearance features to store per track. Higher = more memory but better matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_nnBudget" min="10" max="200" step="10" value="100">
+            </div>
+        </div>
+
+        <!-- IoU Tracker Parameters -->
+        <div class="tracking-params" id="iouParams" data-tracker="iou">
+            <h3>IoU Tracker Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="iou_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum overlap for matching. Simple frame-to-frame matching without motion prediction.
+                </div>
+                <input type="range" class="param-slider" id="iou_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="iou_maxAgeValue">5</span>
+                </div>
+                <div class="param-description">
+                    Frames without detection before track deletion. Use low values for simple tracking.
+                </div>
+                <input type="range" class="param-slider" id="iou_maxAge" min="1" max="20" step="1" value="5">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="iou_minHitsValue">1</span>
+                </div>
+                <div class="param-description">
+                    Detections needed to confirm track. IoU tracker often uses 1 for immediate response.
+                </div>
+                <input type="range" class="param-slider" id="iou_minHits" min="1" max="10" step="1" value="1">
+            </div>
+        </div>
+
+        <!-- Centroid Tracker Parameters -->
+        <div class="tracking-params" id="centroidParams" data-tracker="centroid">
+            <h3>Centroid Tracker Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Distance</span>
+                    <span class="param-value" id="ct_maxDistanceValue">0.10</span>
+                </div>
+                <div class="param-description">
+                    Maximum normalized Euclidean distance between centroids for matching (0.0-1.0).
+                </div>
+                <input type="range" class="param-slider" id="ct_maxDistance" min="0.01" max="0.5" step="0.01" value="0.1">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Disappeared (frames)</span>
+                    <span class="param-value" id="ct_maxDisappearedValue">5</span>
+                </div>
+                <div class="param-description">
+                    Number of frames an object can be missing before being deregistered.
+                </div>
+                <input type="range" class="param-slider" id="ct_maxDisappeared" min="1" max="30" step="1" value="5">
             </div>
         </div>
 
@@ -580,15 +763,49 @@
         let animationFrameId = null;
         let trackingEnabled = false;
         let tracker = null;
+        let trackerType = 'bytetrack';
         
-        // Tracking parameters (default values)
+        // Preprocessing transformation parameters (for coordinate conversion)
+        let preprocessParams = {
+            scale: 1.0,
+            padX: 0,
+            padY: 0,
+            targetSize: 1088,
+            originalWidth: 0,
+            originalHeight: 0
+        };
+        
+        // Tracking parameters for each algorithm
         let trackingParams = {
-            trackHighThresh: 0.6,
-            trackLowThresh: 0.3,
-            newTrackThresh: 0.7,
-            matchThresh: 0.8,
-            maxAge: 30,
-            minHits: 3
+            bytetrack: {
+                trackHighThresh: 0.6,
+                trackLowThresh: 0.3,
+                newTrackThresh: 0.7,
+                matchThresh: 0.8,
+                maxAge: 30,
+                minHits: 3
+            },
+            sort: {
+                iouThreshold: 0.3,
+                maxAge: 1,
+                minHits: 3
+            },
+            deepsort: {
+                iouThreshold: 0.3,
+                maxCosineDistance: 0.2,
+                maxAge: 30,
+                minHits: 3,
+                nnBudget: 100
+            },
+            iou: {
+                iouThreshold: 0.3,
+                maxAge: 5,
+                minHits: 1
+            },
+            centroid: {
+                maxDistance: 0.1,
+                maxDisappeared: 5
+            }
         };
 
         const video = document.getElementById('video');
@@ -612,21 +829,7 @@
         const includeOverlayCheckbox = document.getElementById('includeOverlay');
         const enableTrackingCheckbox = document.getElementById('enableTracking');
         const thresholdInput = document.getElementById('threshold');
-        
-        // Tracking parameter UI elements
-        const trackingParamsPanel = document.getElementById('trackingParams');
-        const trackHighThreshSlider = document.getElementById('trackHighThresh');
-        const trackHighThreshValueEl = document.getElementById('trackHighThreshValue');
-        const trackLowThreshSlider = document.getElementById('trackLowThresh');
-        const trackLowThreshValueEl = document.getElementById('trackLowThreshValue');
-        const newTrackThreshSlider = document.getElementById('newTrackThresh');
-        const newTrackThreshValueEl = document.getElementById('newTrackThreshValue');
-        const matchThreshSlider = document.getElementById('matchThresh');
-        const matchThreshValueEl = document.getElementById('matchThreshValue');
-        const maxAgeSlider = document.getElementById('maxAge');
-        const maxAgeValueEl = document.getElementById('maxAgeValue');
-        const minHitsSlider = document.getElementById('minHits');
-        const minHitsValueEl = document.getElementById('minHitsValue');
+        const trackerTypeSelect = document.getElementById('trackerType');
 
         // ============================================================================
         // DATASET MANAGEMENT
@@ -707,15 +910,27 @@
         // TRACKING UTILITIES
         // ============================================================================
         function initializeTracker() {
-            tracker = new ByteTracker({
-                trackHighThresh: trackingParams.trackHighThresh,
-                trackLowThresh: trackingParams.trackLowThresh,
-                newTrackThresh: trackingParams.newTrackThresh,
-                matchThresh: trackingParams.matchThresh,
-                maxAge: trackingParams.maxAge,
-                minHits: trackingParams.minHits
+            if (!window.TrackerFactory) {
+                uiLogger.error('initializeTracker', 'TrackerFactory not available');
+                return;
+            }
+            
+            const params = trackingParams[trackerType];
+            tracker = TrackerFactory.create(trackerType, params);
+            uiLogger.info('initializeTracker', `${trackerType} tracker initialized with parameters`, params);
+        }
+        
+        function showTrackerParams(type) {
+            // Hide all parameter panels
+            document.querySelectorAll('.tracking-params').forEach(panel => {
+                panel.classList.remove('visible');
             });
-            uiLogger.info('initializeTracker', 'ByteTracker initialized with parameters', trackingParams);
+            
+            // Show the selected tracker's panel
+            const panel = document.querySelector(`.tracking-params[data-tracker="${type}"]`);
+            if (panel && trackingEnabled) {
+                panel.classList.add('visible');
+            }
         }
 
         // ============================================================================
@@ -751,8 +966,8 @@
                     };
                     cameraLogger.info('initCamera', 'Video metadata loaded', videoInfo);
                     
-                    overlayCanvas.width = video.clientWidth;
-                    overlayCanvas.height = video.clientHeight;
+                    // Initial canvas sizing
+                    updateCanvasSize();
                     statusText.textContent = 'Camera ready';
                     
                     cameraLogger.info('initCamera', 'Camera initialization complete');
@@ -761,6 +976,41 @@
                 cameraLogger.error('initCamera', `Failed to initialize camera: ${error.message}`, error);
                 statusText.textContent = `Camera error: ${error.message}`;
             }
+        }
+
+        // ============================================================================
+        // CANVAS SIZING
+        // ============================================================================
+        let lastVideoWidth = 0;
+        let lastVideoHeight = 0;
+        
+        function updateCanvasSize() {
+            // Get the actual rendered size of the video element
+            const rect = video.getBoundingClientRect();
+            
+            // Only update if size has changed to avoid unnecessary operations
+            if (Math.abs(rect.width - lastVideoWidth) < 1 && Math.abs(rect.height - lastVideoHeight) < 1) {
+                return;
+            }
+            
+            lastVideoWidth = rect.width;
+            lastVideoHeight = rect.height;
+            
+            // Set canvas to match the exact rendered video size
+            overlayCanvas.width = rect.width;
+            overlayCanvas.height = rect.height;
+            
+            // Position canvas to overlay the video
+            overlayCanvas.style.width = rect.width + 'px';
+            overlayCanvas.style.height = rect.height + 'px';
+            overlayCanvas.style.left = (rect.left - video.parentElement.getBoundingClientRect().left) + 'px';
+            overlayCanvas.style.top = (rect.top - video.parentElement.getBoundingClientRect().top) + 'px';
+            
+            renderLogger.info('updateCanvasSize', 'Canvas resized to match video', {
+                canvasWidth: overlayCanvas.width,
+                canvasHeight: overlayCanvas.height,
+                videoRenderedSize: `${rect.width}x${rect.height}`
+            });
         }
 
         // ============================================================================
@@ -832,13 +1082,17 @@
             const padX = Math.floor((targetSize - newW) / 2);
             const padY = Math.floor((targetSize - newH) / 2);
 
-            // inferenceLogger.debug('preprocessImage', 'Scaling parameters', {
-            //     originalSize: `${width}x${height}`,
-            //     targetSize: targetSize,
-            //     scale: scale.toFixed(3),
-            //     scaledSize: `${newW}x${newH}`,
-            //     padding: `${padX}x${padY}`
-            // });
+            // Store transformation parameters for coordinate conversion
+            preprocessParams = {
+                scale: scale,
+                padX: padX,
+                padY: padY,
+                targetSize: targetSize,
+                originalWidth: width,
+                originalHeight: height
+            };
+
+            inferenceLogger.info('preprocessImage', 'Preprocessing transformation', preprocessParams);
 
             // Create source canvas from ImageData
             const srcCanvas = document.createElement('canvas');
@@ -967,20 +1221,33 @@
                 
                 for (let i = 0; i < numDetections; i++) {
                     const offset = i * valuesPerDetection;
-                    const x = outputData[offset];
-                    const y = outputData[offset + 1];
-                    const w = outputData[offset + 2];
-                    const h = outputData[offset + 3];
+                    const x_1088 = outputData[offset];
+                    const y_1088 = outputData[offset + 1];
+                    const w_1088 = outputData[offset + 2];
+                    const h_1088 = outputData[offset + 3];
                     const confidence = outputData[offset + 4];
                     const classId = outputData[offset + 5];
                     const angle = outputData[offset + 6];
                     
                     if (confidence >= minConfidence) {
-                        // Normalize coordinates (assuming they're in pixel space of 1088x1088)
-                        const normalizedX = x / 1088;
-                        const normalizedY = y / 1088;
-                        const normalizedW = w / 1088;
-                        const normalizedH = h / 1088;
+                        // Transform coordinates from 1088x1088 padded space back to original video space
+                        // Step 1: Remove padding
+                        const x_scaled = x_1088 - preprocessParams.padX;
+                        const y_scaled = y_1088 - preprocessParams.padY;
+                        const w_scaled = w_1088;
+                        const h_scaled = h_1088;
+                        
+                        // Step 2: Scale back to original dimensions
+                        const x_original = x_scaled / preprocessParams.scale;
+                        const y_original = y_scaled / preprocessParams.scale;
+                        const w_original = w_scaled / preprocessParams.scale;
+                        const h_original = h_scaled / preprocessParams.scale;
+                        
+                        // Step 3: Normalize to 0-1 range based on original video dimensions
+                        const normalizedX = x_original / preprocessParams.originalWidth;
+                        const normalizedY = y_original / preprocessParams.originalHeight;
+                        const normalizedW = w_original / preprocessParams.originalWidth;
+                        const normalizedH = h_original / preprocessParams.originalHeight;
                         
                         detections.push({
                             x: normalizedX,
@@ -1030,8 +1297,8 @@
         function drawDetections() {
             // renderLogger.debug('drawDetections', `Drawing ${detections.length} detections`);
             
-            overlayCanvas.width = video.clientWidth;
-            overlayCanvas.height = video.clientHeight;
+            // Update canvas size to match current video rendering
+            updateCanvasSize();
             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
             const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
@@ -1382,15 +1649,15 @@
             trackingEnabled = e.target.checked;
             
             if (trackingEnabled) {
-                uiLogger.info('enableTrackingCheckbox.change', 'Object tracking enabled');
+                uiLogger.info('enableTrackingCheckbox.change', `Object tracking enabled with ${trackerType}`);
                 
                 // Initialize tracker with current parameters
                 initializeTracker();
                 
-                // Show tracking parameters panel
-                trackingParamsPanel.classList.add('visible');
+                // Show tracking parameters panel for current tracker
+                showTrackerParams(trackerType);
                 
-                statusText.textContent = 'Object tracking enabled - tracks will stabilize over time';
+                statusText.textContent = `Object tracking enabled (${trackerType}) - tracks will stabilize over time`;
                 setTimeout(() => {
                     statusText.textContent = 'Model ready - Click Start Auto or Run Once';
                 }, 2000);
@@ -1398,8 +1665,8 @@
                 uiLogger.info('enableTrackingCheckbox.change', 'Object tracking disabled - showing raw detections');
                 tracker = null;
                 
-                // Hide tracking parameters panel
-                trackingParamsPanel.classList.remove('visible');
+                // Hide all tracking parameters panels
+                showTrackerParams(null);
                 
                 statusText.textContent = 'Object tracking disabled - showing raw detections';
                 setTimeout(() => {
@@ -1411,65 +1678,154 @@
             drawDetections();
         });
 
-        // Tracking parameter sliders
-        trackHighThreshSlider.addEventListener('input', (e) => {
-            trackingParams.trackHighThresh = parseFloat(e.target.value);
-            trackHighThreshValueEl.textContent = `${(trackingParams.trackHighThresh * 100).toFixed(0)}%`;
+        // Tracker type selection
+        trackerTypeSelect.addEventListener('change', (e) => {
+            const oldType = trackerType;
+            trackerType = e.target.value;
+            uiLogger.info('trackerTypeSelect.change', `Tracker type changed: ${oldType} -> ${trackerType}`);
             
-            if (trackingEnabled && tracker) {
-                uiLogger.info('trackHighThreshSlider.input', `Reinitializing tracker with trackHighThresh=${trackingParams.trackHighThresh}`);
+            if (trackingEnabled) {
+                // Reinitialize tracker with new type
                 initializeTracker();
+                showTrackerParams(trackerType);
+                
+                statusText.textContent = `Switched to ${trackerType} tracker`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            } else {
+                // Just hide/show params without initializing
+                showTrackerParams(null);
             }
         });
 
-        trackLowThreshSlider.addEventListener('input', (e) => {
-            trackingParams.trackLowThresh = parseFloat(e.target.value);
-            trackLowThreshValueEl.textContent = `${(trackingParams.trackLowThresh * 100).toFixed(0)}%`;
-            
-            if (trackingEnabled && tracker) {
-                uiLogger.info('trackLowThreshSlider.input', `Reinitializing tracker with trackLowThresh=${trackingParams.trackLowThresh}`);
-                initializeTracker();
-            }
+        // ============================================================================
+        // BYTETRACK PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('bt_trackHighThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.trackHighThresh = parseFloat(e.target.value);
+            document.getElementById('bt_trackHighThreshValue').textContent = `${(trackingParams.bytetrack.trackHighThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
         });
 
-        newTrackThreshSlider.addEventListener('input', (e) => {
-            trackingParams.newTrackThresh = parseFloat(e.target.value);
-            newTrackThreshValueEl.textContent = `${(trackingParams.newTrackThresh * 100).toFixed(0)}%`;
-            
-            if (trackingEnabled && tracker) {
-                uiLogger.info('newTrackThreshSlider.input', `Reinitializing tracker with newTrackThresh=${trackingParams.newTrackThresh}`);
-                initializeTracker();
-            }
+        document.getElementById('bt_trackLowThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.trackLowThresh = parseFloat(e.target.value);
+            document.getElementById('bt_trackLowThreshValue').textContent = `${(trackingParams.bytetrack.trackLowThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
         });
 
-        matchThreshSlider.addEventListener('input', (e) => {
-            trackingParams.matchThresh = parseFloat(e.target.value);
-            matchThreshValueEl.textContent = trackingParams.matchThresh.toFixed(2);
-            
-            if (trackingEnabled && tracker) {
-                uiLogger.info('matchThreshSlider.input', `Reinitializing tracker with matchThresh=${trackingParams.matchThresh}`);
-                initializeTracker();
-            }
+        document.getElementById('bt_newTrackThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.newTrackThresh = parseFloat(e.target.value);
+            document.getElementById('bt_newTrackThreshValue').textContent = `${(trackingParams.bytetrack.newTrackThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
         });
 
-        maxAgeSlider.addEventListener('input', (e) => {
-            trackingParams.maxAge = parseInt(e.target.value);
-            maxAgeValueEl.textContent = trackingParams.maxAge;
-            
-            if (trackingEnabled && tracker) {
-                uiLogger.info('maxAgeSlider.input', `Reinitializing tracker with maxAge=${trackingParams.maxAge}`);
-                initializeTracker();
-            }
+        document.getElementById('bt_matchThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.matchThresh = parseFloat(e.target.value);
+            document.getElementById('bt_matchThreshValue').textContent = trackingParams.bytetrack.matchThresh.toFixed(2);
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
         });
 
-        minHitsSlider.addEventListener('input', (e) => {
-            trackingParams.minHits = parseInt(e.target.value);
-            minHitsValueEl.textContent = trackingParams.minHits;
-            
-            if (trackingEnabled && tracker) {
-                uiLogger.info('minHitsSlider.input', `Reinitializing tracker with minHits=${trackingParams.minHits}`);
-                initializeTracker();
-            }
+        document.getElementById('bt_maxAge').addEventListener('input', (e) => {
+            trackingParams.bytetrack.maxAge = parseInt(e.target.value);
+            document.getElementById('bt_maxAgeValue').textContent = trackingParams.bytetrack.maxAge;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_minHits').addEventListener('input', (e) => {
+            trackingParams.bytetrack.minHits = parseInt(e.target.value);
+            document.getElementById('bt_minHitsValue').textContent = trackingParams.bytetrack.minHits;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        // ============================================================================
+        // SORT PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('sort_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.sort.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('sort_iouThresholdValue').textContent = trackingParams.sort.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        document.getElementById('sort_maxAge').addEventListener('input', (e) => {
+            trackingParams.sort.maxAge = parseInt(e.target.value);
+            document.getElementById('sort_maxAgeValue').textContent = trackingParams.sort.maxAge;
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        document.getElementById('sort_minHits').addEventListener('input', (e) => {
+            trackingParams.sort.minHits = parseInt(e.target.value);
+            document.getElementById('sort_minHitsValue').textContent = trackingParams.sort.minHits;
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        // ============================================================================
+        // DEEPSORT PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('ds_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.deepsort.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('ds_iouThresholdValue').textContent = trackingParams.deepsort.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_maxCosineDistance').addEventListener('input', (e) => {
+            trackingParams.deepsort.maxCosineDistance = parseFloat(e.target.value);
+            document.getElementById('ds_maxCosineDistanceValue').textContent = trackingParams.deepsort.maxCosineDistance.toFixed(2);
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_maxAge').addEventListener('input', (e) => {
+            trackingParams.deepsort.maxAge = parseInt(e.target.value);
+            document.getElementById('ds_maxAgeValue').textContent = trackingParams.deepsort.maxAge;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_minHits').addEventListener('input', (e) => {
+            trackingParams.deepsort.minHits = parseInt(e.target.value);
+            document.getElementById('ds_minHitsValue').textContent = trackingParams.deepsort.minHits;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_nnBudget').addEventListener('input', (e) => {
+            trackingParams.deepsort.nnBudget = parseInt(e.target.value);
+            document.getElementById('ds_nnBudgetValue').textContent = trackingParams.deepsort.nnBudget;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        // ============================================================================
+        // IOU TRACKER PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('iou_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.iou.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('iou_iouThresholdValue').textContent = trackingParams.iou.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        document.getElementById('iou_maxAge').addEventListener('input', (e) => {
+            trackingParams.iou.maxAge = parseInt(e.target.value);
+            document.getElementById('iou_maxAgeValue').textContent = trackingParams.iou.maxAge;
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        document.getElementById('iou_minHits').addEventListener('input', (e) => {
+            trackingParams.iou.minHits = parseInt(e.target.value);
+            document.getElementById('iou_minHitsValue').textContent = trackingParams.iou.minHits;
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        // ============================================================================
+        // CENTROID TRACKER PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('ct_maxDistance').addEventListener('input', (e) => {
+            trackingParams.centroid.maxDistance = parseFloat(e.target.value);
+            document.getElementById('ct_maxDistanceValue').textContent = trackingParams.centroid.maxDistance.toFixed(2);
+            if (trackingEnabled && trackerType === 'centroid') initializeTracker();
+        });
+
+        document.getElementById('ct_maxDisappeared').addEventListener('input', (e) => {
+            trackingParams.centroid.maxDisappeared = parseInt(e.target.value);
+            document.getElementById('ct_maxDisappearedValue').textContent = trackingParams.centroid.maxDisappeared;
+            if (trackingEnabled && trackerType === 'centroid') initializeTracker();
         });
 
         // ============================================================================
@@ -1480,6 +1836,14 @@
         mainLogger.debug('init', 'WebGPU support', { 
             hasGPU: 'gpu' in navigator,
             hasWebGPU: typeof navigator.gpu !== 'undefined'
+        });
+        
+        // Handle window resize to keep canvas aligned
+        window.addEventListener('resize', () => {
+            if (video.videoWidth > 0) {
+                updateCanvasSize();
+                drawDetections();
+            }
         });
         
         initCamera();
