@@ -6,6 +6,8 @@
     <title>WebGPU Camera Test</title>
     <!-- ONNX Runtime WebGPU build -->
     <script src="onnx/ort.webgpu.min.js"></script>
+    <!-- ByteTrack object tracking -->
+    <script src="bytetrack.js"></script>
     <style>
         body {
             margin: 0;
@@ -112,6 +114,55 @@
             margin-top: 10px;
             font-size: 14px;
         }
+        .tracking-params {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px auto;
+            max-width: 600px;
+            display: none;
+        }
+        .tracking-params.visible {
+            display: block;
+        }
+        .tracking-params h3 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .param-group {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #444;
+        }
+        .param-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .param-value {
+            color: #00ff00;
+            font-size: 16px;
+        }
+        .param-description {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .param-slider {
+            width: 100%;
+            height: 6px;
+        }
     </style>
 </head>
 <body>
@@ -128,6 +179,18 @@
             <button id="runOnce" disabled>Run Once</button>
             <button id="autoMode" disabled>Start Auto</button>
             <button id="capture" disabled>Capture (0)</button>
+            <button id="downloadTraining" disabled>Download Training Data</button>
+        </div>
+
+        <div class="controls" style="margin-top: 10px;">
+            <label style="cursor: pointer; margin-right: 20px;">
+                <input type="checkbox" id="includeOverlay" checked>
+                Include visualization with bounding boxes
+            </label>
+            <label style="cursor: pointer;">
+                <input type="checkbox" id="enableTracking">
+                Enable Object Tracking (ByteTrack)
+            </label>
         </div>
 
         <div class="slider-container">
@@ -139,6 +202,76 @@
             </div>
             <div class="slider-value" id="thresholdValue">70%</div>
             <div class="detection-count" id="detectionCount">0 / 0 cards shown</div>
+        </div>
+
+        <div class="tracking-params" id="trackingParams">
+            <h3>ByteTrack Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>High Confidence Threshold</span>
+                    <span class="param-value" id="trackHighThreshValue">60%</span>
+                </div>
+                <div class="param-description">
+                    Detections above this confidence are prioritized for first-stage matching. Higher values = more selective.
+                </div>
+                <input type="range" class="param-slider" id="trackHighThresh" min="0.3" max="0.95" step="0.05" value="0.6">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Low Confidence Threshold</span>
+                    <span class="param-value" id="trackLowThreshValue">30%</span>
+                </div>
+                <div class="param-description">
+                    Minimum confidence for second-stage matching. Helps recover temporarily low-confidence detections of existing tracks.
+                </div>
+                <input type="range" class="param-slider" id="trackLowThresh" min="0.1" max="0.6" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>New Track Threshold</span>
+                    <span class="param-value" id="newTrackThreshValue">70%</span>
+                </div>
+                <div class="param-description">
+                    Minimum confidence required to start tracking a new object. Higher values prevent false positives from creating tracks.
+                </div>
+                <input type="range" class="param-slider" id="newTrackThresh" min="0.4" max="0.95" step="0.05" value="0.7">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Match Threshold (IoU)</span>
+                    <span class="param-value" id="matchThreshValue">0.80</span>
+                </div>
+                <div class="param-description">
+                    Minimum Intersection-over-Union to match a detection to an existing track. Higher values = stricter matching (0.0-1.0).
+                </div>
+                <input type="range" class="param-slider" id="matchThresh" min="0.3" max="0.95" step="0.05" value="0.8">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="maxAgeValue">30</span>
+                </div>
+                <div class="param-description">
+                    Number of frames a track can persist without a matched detection before being deleted. Higher = more tolerant of occlusion.
+                </div>
+                <input type="range" class="param-slider" id="maxAge" min="5" max="60" step="5" value="30">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Number of consecutive detections required before a track is confirmed and displayed. Higher = fewer false positives.
+                </div>
+                <input type="range" class="param-slider" id="minHits" min="1" max="10" step="1" value="3">
+            </div>
         </div>
 
         <div id="status">
@@ -225,6 +358,18 @@
         let detections = [];
         let confidenceThreshold = 0.7;
         let animationFrameId = null;
+        let trackingEnabled = false;
+        let tracker = null;
+        
+        // Tracking parameters (default values)
+        let trackingParams = {
+            trackHighThresh: 0.6,
+            trackLowThresh: 0.3,
+            newTrackThresh: 0.7,
+            matchThresh: 0.8,
+            maxAge: 30,
+            minHits: 3
+        };
 
         const video = document.getElementById('video');
         const overlayCanvas = document.getElementById('overlayCanvas');
@@ -242,7 +387,40 @@
         const runOnceBtn = document.getElementById('runOnce');
         const autoModeBtn = document.getElementById('autoMode');
         const captureBtn = document.getElementById('capture');
+        const downloadTrainingBtn = document.getElementById('downloadTraining');
+        const includeOverlayCheckbox = document.getElementById('includeOverlay');
+        const enableTrackingCheckbox = document.getElementById('enableTracking');
         const thresholdInput = document.getElementById('threshold');
+        
+        // Tracking parameter UI elements
+        const trackingParamsPanel = document.getElementById('trackingParams');
+        const trackHighThreshSlider = document.getElementById('trackHighThresh');
+        const trackHighThreshValueEl = document.getElementById('trackHighThreshValue');
+        const trackLowThreshSlider = document.getElementById('trackLowThresh');
+        const trackLowThreshValueEl = document.getElementById('trackLowThreshValue');
+        const newTrackThreshSlider = document.getElementById('newTrackThresh');
+        const newTrackThreshValueEl = document.getElementById('newTrackThreshValue');
+        const matchThreshSlider = document.getElementById('matchThresh');
+        const matchThreshValueEl = document.getElementById('matchThreshValue');
+        const maxAgeSlider = document.getElementById('maxAge');
+        const maxAgeValueEl = document.getElementById('maxAgeValue');
+        const minHitsSlider = document.getElementById('minHits');
+        const minHitsValueEl = document.getElementById('minHitsValue');
+
+        // ============================================================================
+        // TRACKING UTILITIES
+        // ============================================================================
+        function initializeTracker() {
+            tracker = new ByteTracker({
+                trackHighThresh: trackingParams.trackHighThresh,
+                trackLowThresh: trackingParams.trackLowThresh,
+                newTrackThresh: trackingParams.newTrackThresh,
+                matchThresh: trackingParams.matchThresh,
+                maxAge: trackingParams.maxAge,
+                minHits: trackingParams.minHits
+            });
+            uiLogger.info('initializeTracker', 'ByteTracker initialized with parameters', trackingParams);
+        }
 
         // ============================================================================
         // CAMERA INITIALIZATION
@@ -527,6 +705,14 @@
                     inferenceLogger.debug('runInference', 'Detection confidences', { confidences });
                 }
 
+                // Apply object tracking if enabled
+                if (trackingEnabled && tracker) {
+                    inferenceLogger.info('runInference', 'Applying ByteTrack object tracking');
+                    const trackedDetections = tracker.update(detections);
+                    inferenceLogger.info('runInference', `Tracking: ${detections.length} raw -> ${trackedDetections.length} tracked`);
+                    detections = trackedDetections;
+                }
+
                 drawDetections();
                 updateStats();
 
@@ -578,7 +764,15 @@
                 overlayCtx.rotate(-angle);
                 overlayCtx.fillStyle = '#00ff00';
                 overlayCtx.font = '16px monospace';
-                const label = `${(det.confidence * 100).toFixed(0)}%`;
+                
+                // Show track ID if tracking is enabled, otherwise just confidence
+                let label;
+                if (trackingEnabled && det.trackId !== undefined) {
+                    label = `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
+                } else {
+                    label = `${(det.confidence * 100).toFixed(0)}%`;
+                }
+                
                 overlayCtx.fillText(label, -w/2, -h/2 - 5);
                 
                 overlayCtx.restore();
@@ -598,6 +792,7 @@
             detectionCountEl.textContent = `${filtered.length} / ${detections.length} cards shown`;
             captureBtn.textContent = `Capture (${filtered.length})`;
             captureBtn.disabled = filtered.length === 0;
+            downloadTrainingBtn.disabled = detections.length === 0;
             
             uiLogger.debug('updateStats', `Stats updated: ${filtered.length}/${detections.length} shown`);
         }
@@ -616,6 +811,221 @@
                     animationFrameId = requestAnimationFrame(autoModeLoop);
                 }
             });
+        }
+
+        // ============================================================================
+        // TRAINING DATA EXPORT
+        // ============================================================================
+        
+        /**
+         * Convert OBB (center, width, height, angle) to 4 corner points
+         * Returns normalized coordinates in YOLO OBB format
+         */
+        function obbToCorners(detection) {
+            const { x, y, width, height, angle } = detection;
+            
+            // Half dimensions
+            const hw = width / 2;
+            const hh = height / 2;
+            
+            // Compute corners relative to center (before rotation)
+            // Top-left, top-right, bottom-right, bottom-left
+            const corners = [
+                [-hw, -hh],
+                [hw, -hh],
+                [hw, hh],
+                [-hw, hh]
+            ];
+            
+            // Rotate corners around center
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            
+            const rotatedCorners = corners.map(([cx, cy]) => {
+                const rx = cx * cos - cy * sin;
+                const ry = cx * sin + cy * cos;
+                return [x + rx, y + ry];
+            });
+            
+            return rotatedCorners;
+        }
+        
+        /**
+         * Generate YOLO OBB format label file content
+         */
+        function generateLabelFile(detections) {
+            const lines = detections.map(det => {
+                const corners = obbToCorners(det);
+                const classId = Math.round(det.classId);
+                
+                // Format: class_id x1 y1 x2 y2 x3 y3 x4 y4
+                const coords = corners.map(([x, y]) => 
+                    `${x.toFixed(6)} ${y.toFixed(6)}`
+                ).join(' ');
+                
+                return `${classId} ${coords}`;
+            }).join('\n');
+            
+            return lines + '\n';
+        }
+        
+        /**
+         * Trigger file download
+         */
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        /**
+         * Draw bounding boxes on a canvas for visualization
+         * Note: Canvas dimensions should already be set by caller
+         */
+        function drawOverlayOnCanvas(ctx, imageWidth, imageHeight, detectionsArray) {
+            detectionsArray.forEach((det) => {
+                // Convert normalized coordinates to canvas pixels
+                const centerX = det.x * imageWidth;
+                const centerY = det.y * imageHeight;
+                const w = det.width * imageWidth;
+                const h = det.height * imageHeight;
+                const angle = det.angle || 0;
+
+                ctx.save();
+                
+                // Move to center of box and rotate
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle);
+                
+                // Draw rotated rectangle (centered at origin after translate)
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(-w/2, -h/2, w, h);
+                
+                // Draw confidence label (unrotated for readability)
+                ctx.rotate(-angle);
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '20px monospace';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 4;
+                
+                // Show track ID if available, otherwise just confidence
+                let label;
+                if (det.trackId !== undefined) {
+                    label = `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
+                } else {
+                    label = `${(det.confidence * 100).toFixed(0)}%`;
+                }
+                
+                // Draw text with black outline for visibility
+                ctx.strokeText(label, -w/2, -h/2 - 8);
+                ctx.fillText(label, -w/2, -h/2 - 8);
+                
+                ctx.restore();
+            });
+        }
+
+        /**
+         * Download current frame as training data
+         */
+        async function downloadTrainingData() {
+            if (detections.length === 0) {
+                uiLogger.warning('downloadTrainingData', 'No detections to export');
+                alert('No detections available. Run inference first.');
+                return;
+            }
+            
+            // Filter detections by confidence threshold
+            const filteredDetections = detections.filter(d => d.confidence >= confidenceThreshold);
+            
+            if (filteredDetections.length === 0) {
+                uiLogger.warning('downloadTrainingData', 'No detections pass confidence threshold');
+                alert(`No detections pass the ${(confidenceThreshold * 100).toFixed(0)}% confidence threshold. Lower the threshold or run inference again.`);
+                return;
+            }
+            
+            try {
+                uiLogger.info('downloadTrainingData', `Exporting ${filteredDetections.length} detections as training data (threshold: ${confidenceThreshold})`);
+                
+                // Generate timestamp-based filename
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_').slice(0, -5);
+                const baseFilename = `training_${timestamp}`;
+                
+                // Capture current frame from video
+                hiddenCanvas.width = video.videoWidth;
+                hiddenCanvas.height = video.videoHeight;
+                hiddenCtx.drawImage(video, 0, 0);
+                
+                // Download original image as JPG
+                hiddenCanvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${baseFilename}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    uiLogger.info('downloadTrainingData', `Downloaded image: ${baseFilename}.jpg`);
+                }, 'image/jpeg', 0.95);
+                
+                // Download overlay visualization if checkbox is checked
+                if (includeOverlayCheckbox.checked) {
+                    uiLogger.info('downloadTrainingData', 'Creating overlay visualization');
+                    
+                    // Create a temporary canvas for the overlay
+                    const overlayVisCanvas = document.createElement('canvas');
+                    const overlayVisCtx = overlayVisCanvas.getContext('2d');
+                    
+                    // Set canvas size FIRST (this clears the canvas)
+                    overlayVisCanvas.width = video.videoWidth;
+                    overlayVisCanvas.height = video.videoHeight;
+                    
+                    // Draw the captured frame from hiddenCanvas
+                    overlayVisCtx.drawImage(hiddenCanvas, 0, 0);
+                    
+                    // Draw filtered bounding boxes on top (don't resize canvas again!)
+                    drawOverlayOnCanvas(overlayVisCtx, video.videoWidth, video.videoHeight, filteredDetections);
+                    
+                    // Download overlay image
+                    overlayVisCanvas.toBlob((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${baseFilename}_overlay.jpg`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        uiLogger.info('downloadTrainingData', `Downloaded overlay: ${baseFilename}_overlay.jpg`);
+                    }, 'image/jpeg', 0.95);
+                }
+                
+                // Generate and download label file (filtered detections only)
+                const labelContent = generateLabelFile(filteredDetections);
+                downloadFile(labelContent, `${baseFilename}.txt`, 'text/plain');
+                
+                uiLogger.info('downloadTrainingData', `Downloaded labels: ${baseFilename}.txt`);
+                uiLogger.debug('downloadTrainingData', 'Label content', { labelContent });
+                
+                const filesDownloaded = includeOverlayCheckbox.checked ? 3 : 2;
+                statusText.textContent = `Training data downloaded: ${filesDownloaded} files, ${filteredDetections.length} detections`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 3000);
+                
+            } catch (error) {
+                uiLogger.error('downloadTrainingData', `Failed to download training data: ${error.message}`, error);
+                alert(`Error downloading training data: ${error.message}`);
+            }
         }
 
         // ============================================================================
@@ -652,6 +1062,11 @@
             alert(`Would capture ${filtered.length} cards (not implemented in test page)`);
         });
 
+        downloadTrainingBtn.addEventListener('click', () => {
+            uiLogger.info('downloadTrainingBtn.click', 'User clicked Download Training Data');
+            downloadTrainingData();
+        });
+
         thresholdInput.addEventListener('input', (e) => {
             const oldThreshold = confidenceThreshold;
             confidenceThreshold = parseFloat(e.target.value);
@@ -660,6 +1075,100 @@
             thresholdValueEl.textContent = `${(confidenceThreshold * 100).toFixed(0)}%`;
             drawDetections();
             updateStats();
+        });
+
+        enableTrackingCheckbox.addEventListener('change', (e) => {
+            trackingEnabled = e.target.checked;
+            
+            if (trackingEnabled) {
+                uiLogger.info('enableTrackingCheckbox.change', 'Object tracking enabled');
+                
+                // Initialize tracker with current parameters
+                initializeTracker();
+                
+                // Show tracking parameters panel
+                trackingParamsPanel.classList.add('visible');
+                
+                statusText.textContent = 'Object tracking enabled - tracks will stabilize over time';
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            } else {
+                uiLogger.info('enableTrackingCheckbox.change', 'Object tracking disabled - showing raw detections');
+                tracker = null;
+                
+                // Hide tracking parameters panel
+                trackingParamsPanel.classList.remove('visible');
+                
+                statusText.textContent = 'Object tracking disabled - showing raw detections';
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            }
+            
+            // Redraw current detections with new tracking state
+            drawDetections();
+        });
+
+        // Tracking parameter sliders
+        trackHighThreshSlider.addEventListener('input', (e) => {
+            trackingParams.trackHighThresh = parseFloat(e.target.value);
+            trackHighThreshValueEl.textContent = `${(trackingParams.trackHighThresh * 100).toFixed(0)}%`;
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('trackHighThreshSlider.input', `Reinitializing tracker with trackHighThresh=${trackingParams.trackHighThresh}`);
+                initializeTracker();
+            }
+        });
+
+        trackLowThreshSlider.addEventListener('input', (e) => {
+            trackingParams.trackLowThresh = parseFloat(e.target.value);
+            trackLowThreshValueEl.textContent = `${(trackingParams.trackLowThresh * 100).toFixed(0)}%`;
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('trackLowThreshSlider.input', `Reinitializing tracker with trackLowThresh=${trackingParams.trackLowThresh}`);
+                initializeTracker();
+            }
+        });
+
+        newTrackThreshSlider.addEventListener('input', (e) => {
+            trackingParams.newTrackThresh = parseFloat(e.target.value);
+            newTrackThreshValueEl.textContent = `${(trackingParams.newTrackThresh * 100).toFixed(0)}%`;
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('newTrackThreshSlider.input', `Reinitializing tracker with newTrackThresh=${trackingParams.newTrackThresh}`);
+                initializeTracker();
+            }
+        });
+
+        matchThreshSlider.addEventListener('input', (e) => {
+            trackingParams.matchThresh = parseFloat(e.target.value);
+            matchThreshValueEl.textContent = trackingParams.matchThresh.toFixed(2);
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('matchThreshSlider.input', `Reinitializing tracker with matchThresh=${trackingParams.matchThresh}`);
+                initializeTracker();
+            }
+        });
+
+        maxAgeSlider.addEventListener('input', (e) => {
+            trackingParams.maxAge = parseInt(e.target.value);
+            maxAgeValueEl.textContent = trackingParams.maxAge;
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('maxAgeSlider.input', `Reinitializing tracker with maxAge=${trackingParams.maxAge}`);
+                initializeTracker();
+            }
+        });
+
+        minHitsSlider.addEventListener('input', (e) => {
+            trackingParams.minHits = parseInt(e.target.value);
+            minHitsValueEl.textContent = trackingParams.minHits;
+            
+            if (trackingEnabled && tracker) {
+                uiLogger.info('minHitsSlider.input', `Reinitializing tracker with minHits=${trackingParams.minHits}`);
+                initializeTracker();
+            }
         });
 
         // ============================================================================

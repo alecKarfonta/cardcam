@@ -59,7 +59,7 @@ services:
       - "3001:80"
     restart: unless-stopped
     volumes:
-      - ./frontend/public/models:/usr/share/nginx/html/models
+      - ./frontend/public:/usr/share/nginx/html
     environment:
       - NODE_ENV=production
 
