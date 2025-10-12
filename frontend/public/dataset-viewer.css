@@ -246,12 +246,13 @@
     border: 2px solid #00ff00;
     border-radius: 5px;
     min-height: 400px;
+    overflow: auto;  /* Allow scrolling if canvas is larger than container */
 }
 
 #editorCanvas {
     display: block;
-    max-width: 100%;
-    max-height: 600px;
+    /* Do NOT use max-width/max-height as they override the explicit dimensions set by JS */
+    /* The canvas size is already set correctly by JavaScript to match image aspect ratio */
     cursor: crosshair;
     user-select: none;
     -webkit-user-select: none;

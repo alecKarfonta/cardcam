@@ -70,13 +70,11 @@ class BoundingBoxEditor {
      * Setup mouse event listeners
      */
     setupEventListeners() {
-        console.log('BoundingBoxEditor: Setting up event listeners on canvas', this.canvas);
         this.canvas.addEventListener('mousedown', this.boundHandlers.mousedown);
         this.canvas.addEventListener('mousemove', this.boundHandlers.mousemove);
         this.canvas.addEventListener('mouseup', this.boundHandlers.mouseup);
         this.canvas.addEventListener('mouseleave', this.boundHandlers.mouseleave);
         this.canvas.addEventListener('wheel', this.boundHandlers.wheel);
-        console.log('BoundingBoxEditor: Event listeners attached');
     }
 
     /**
@@ -127,7 +125,10 @@ class BoundingBoxEditor {
 
     /**
      * Convert normalized coordinates to canvas coordinates
-     * Accounts for letterboxing
+     * Accounts for letterboxing and image aspect ratio
+     * 
+     * Note: normX is normalized by image width, normY by image height
+     * So they need different scaling factors to get to canvas pixels
      */
     normalizedToCanvas(normX, normY) {
         return {
@@ -145,15 +146,7 @@ class BoundingBoxEditor {
         // Check in reverse order (top to bottom in z-order)
         for (let i = this.trainingExample.boundingBoxes.length - 1; i >= 0; i--) {
             const bbox = this.trainingExample.boundingBoxes[i];
-            const contains = bbox.containsPoint(normX, normY);
-            console.log(`findBboxAtPoint: Checking bbox ${i}`, {
-                bboxCenter: { x: bbox.x, y: bbox.y },
-                bboxSize: { width: bbox.width, height: bbox.height },
-                rotation: bbox.rotation,
-                clickPoint: { x: normX, y: normY },
-                contains: contains
-            });
-            if (contains) {
+            if (bbox.containsPoint(normX, normY)) {
                 return i;
             }
         }
@@ -168,27 +161,35 @@ class BoundingBoxEditor {
         if (this.selectedBboxIndex === -1) return null;
 
         const bbox = this.trainingExample.boundingBoxes[this.selectedBboxIndex];
-        const corners = bbox.getCorners();
-        const handleSize = this.handleSize / this.canvas.width;
+        
+        // Transform click point to bbox's local coordinate system
+        const cos = Math.cos(-bbox.rotation);
+        const sin = Math.sin(-bbox.rotation);
+        const dx = normX - bbox.x;
+        const dy = normY - bbox.y;
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+        
+        const hw = bbox.width / 2;
+        const hh = bbox.height / 2;
+        const handleSize = this.handleSize / Math.min(this.imageDrawWidth, this.imageDrawHeight);
 
         // Check corner handles
+        const corners = [
+            [-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]
+        ];
+        
         for (let i = 0; i < corners.length; i++) {
             const [cx, cy] = corners[i];
-            const dist = Math.sqrt((normX - cx) ** 2 + (normY - cy) ** 2);
+            const dist = Math.sqrt((localX - cx) ** 2 + (localY - cy) ** 2);
             if (dist < handleSize) {
                 return { type: 'corner', index: i };
             }
         }
 
-        // Check rotation handle (above the top edge)
-        const { x: cx, y: cy } = this.normalizedToCanvas(bbox.x, bbox.y);
-        const rotHandleX = cx;
-        const rotHandleY = cy - this.rotationHandleDistance;
-        const { x: rotNormX, y: rotNormY } = this.canvasToNormalized(
-            rotHandleX + this.canvas.getBoundingClientRect().left,
-            rotHandleY + this.canvas.getBoundingClientRect().top
-        );
-        const rotDist = Math.sqrt((normX - rotNormX) ** 2 + (normY - rotNormY) ** 2);
+        // Check rotation handle (above the center, in global space)
+        const rotHandleDist = this.rotationHandleDistance / this.imageDrawHeight;
+        const rotDist = Math.sqrt(dx ** 2 + (dy + rotHandleDist) ** 2);
         if (rotDist < handleSize) {
             return { type: 'rotation', index: 0 };
         }
@@ -200,42 +201,13 @@ class BoundingBoxEditor {
      * Handle mouse down event
      */
     handleMouseDown(e) {
-        console.log('BoundingBoxEditor: mousedown event', { 
-            clientX: e.clientX, 
-            clientY: e.clientY,
-            target: e.target
-        });
-        
-        if (!this.trainingExample) {
-            console.warn('BoundingBoxEditor: No training example loaded');
-            return;
-        }
-
-        console.log('BoundingBoxEditor: Image bounds', {
-            imageDrawX: this.imageDrawX,
-            imageDrawY: this.imageDrawY,
-            imageDrawWidth: this.imageDrawWidth,
-            imageDrawHeight: this.imageDrawHeight
-        });
+        if (!this.trainingExample) return;
 
         const { x, y } = this.canvasToNormalized(e.clientX, e.clientY);
-        console.log('BoundingBoxEditor: Click at normalized coords', { x, y });
-        
-        // Log all bounding boxes for comparison
-        console.log('BoundingBoxEditor: Available bboxes:', 
-            this.trainingExample.boundingBoxes.map((bbox, i) => ({
-                index: i,
-                x: bbox.x,
-                y: bbox.y,
-                width: bbox.width,
-                height: bbox.height
-            }))
-        );
         
         // Check if clicking on a handle
         const handle = this.findHandleAtPoint(x, y);
         if (handle) {
-            console.log('BoundingBoxEditor: Found handle', handle);
             if (handle.type === 'rotation') {
                 this.isRotating = true;
             } else {
@@ -250,10 +222,8 @@ class BoundingBoxEditor {
 
         // Check if clicking on a bounding box
         const bboxIndex = this.findBboxAtPoint(x, y);
-        console.log('BoundingBoxEditor: findBboxAtPoint returned', bboxIndex);
         
         if (bboxIndex !== -1) {
-            console.log('BoundingBoxEditor: Selected bbox', bboxIndex);
             this.selectedBboxIndex = bboxIndex;
             this.isDragging = true;
             this.dragStartX = x;
@@ -266,7 +236,6 @@ class BoundingBoxEditor {
             
             this.render();
         } else {
-            console.log('BoundingBoxEditor: No bbox found at click point, deselecting');
             this.selectedBboxIndex = -1;
             this.render();
         }
@@ -435,13 +404,6 @@ class BoundingBoxEditor {
             this.imageDrawY = 0;
             this.imageDrawX = (this.canvas.width - this.imageDrawWidth) / 2;
         }
-        
-        console.log('calculateImageBounds:', {
-            imageDrawX: this.imageDrawX,
-            imageDrawY: this.imageDrawY,
-            imageDrawWidth: this.imageDrawWidth,
-            imageDrawHeight: this.imageDrawHeight
-        });
     }
 
     /**
@@ -488,63 +450,72 @@ class BoundingBoxEditor {
      * Draw a single bounding box
      */
     drawBoundingBox(bbox, color, drawHandles = false) {
-        const corners = bbox.getCorners();
-        const canvasCorners = corners.map(([x, y]) => this.normalizedToCanvas(x, y));
+        // Convert center to canvas coordinates
+        const { x: centerX, y: centerY } = this.normalizedToCanvas(bbox.x, bbox.y);
+        
+        // Convert dimensions to canvas pixels
+        const width = bbox.width * this.imageDrawWidth;
+        const height = bbox.height * this.imageDrawHeight;
 
         this.ctx.save();
-
-        // Draw box
+        
+        // Translate to center and rotate (same as live view)
+        this.ctx.translate(centerX, centerY);
+        this.ctx.rotate(bbox.rotation);
+        
+        // Draw rotated rectangle centered at origin
         this.ctx.strokeStyle = color;
         this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(canvasCorners[0].x, canvasCorners[0].y);
-        for (let i = 1; i < canvasCorners.length; i++) {
-            this.ctx.lineTo(canvasCorners[i].x, canvasCorners[i].y);
-        }
-        this.ctx.closePath();
-        this.ctx.stroke();
-
+        this.ctx.strokeRect(-width/2, -height/2, width, height);
+        
         // Draw center point
-        const { x: cx, y: cy } = this.normalizedToCanvas(bbox.x, bbox.y);
         this.ctx.fillStyle = color;
         this.ctx.beginPath();
-        this.ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, 4, 0, Math.PI * 2);
         this.ctx.fill();
-
-        // Draw confidence label
+        
+        // Draw confidence label (unrotated for readability)
+        this.ctx.rotate(-bbox.rotation);
         this.ctx.fillStyle = color;
         this.ctx.strokeStyle = '#000000';
         this.ctx.lineWidth = 3;
         this.ctx.font = 'bold 16px monospace';
         const label = `${(bbox.confidence * 100).toFixed(0)}%`;
-        const labelX = canvasCorners[0].x;
-        const labelY = canvasCorners[0].y - 10;
-        this.ctx.strokeText(label, labelX, labelY);
-        this.ctx.fillText(label, labelX, labelY);
-
+        this.ctx.strokeText(label, -width/2, -height/2 - 10);
+        this.ctx.fillText(label, -width/2, -height/2 - 10);
+        this.ctx.rotate(bbox.rotation);
+        
         // Draw handles if selected
         if (drawHandles) {
-            // Corner handles
+            // Corner handles at the four corners of the rotated rectangle
+            const corners = [
+                [-width/2, -height/2],
+                [width/2, -height/2],
+                [width/2, height/2],
+                [-width/2, height/2]
+            ];
+            
             this.ctx.fillStyle = this.colors.handle;
             this.ctx.strokeStyle = '#000000';
             this.ctx.lineWidth = 1;
-            canvasCorners.forEach(corner => {
+            corners.forEach(([x, y]) => {
                 this.ctx.beginPath();
-                this.ctx.arc(corner.x, corner.y, this.handleSize, 0, Math.PI * 2);
+                this.ctx.arc(x, y, this.handleSize, 0, Math.PI * 2);
                 this.ctx.fill();
                 this.ctx.stroke();
             });
 
-            // Rotation handle (circle above center)
-            const rotHandleX = cx;
-            const rotHandleY = cy - this.rotationHandleDistance;
+            // Rotation handle (circle above center, unrotated)
+            this.ctx.rotate(-bbox.rotation);
+            const rotHandleX = 0;
+            const rotHandleY = -this.rotationHandleDistance;
             
             // Line from center to rotation handle
             this.ctx.strokeStyle = color;
             this.ctx.lineWidth = 1;
             this.ctx.setLineDash([5, 5]);
             this.ctx.beginPath();
-            this.ctx.moveTo(cx, cy);
+            this.ctx.moveTo(0, 0);
             this.ctx.lineTo(rotHandleX, rotHandleY);
             this.ctx.stroke();
             this.ctx.setLineDash([]);

@@ -388,11 +388,251 @@
                 padding: 10px;
             }
         }
+        
+        /* Model Selection Panel */
+        .model-selection-panel {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: clamp(15px, 2vw, 20px);
+            margin-bottom: clamp(15px, 2vh, 20px);
+        }
+        
+        .model-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .model-panel-title {
+            font-size: clamp(16px, 2.5vw, 20px);
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .model-toggle-btn {
+            padding: 6px 12px;
+            font-size: clamp(11px, 1.8vw, 13px);
+            background: #444;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        .model-toggle-btn:hover {
+            background: #555;
+        }
+        
+        .model-panel-content {
+            display: block;
+        }
+        
+        .model-panel-content.collapsed {
+            display: none;
+        }
+        
+        .model-search-filters {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        
+        @media (min-width: 768px) {
+            .model-search-filters {
+                grid-template-columns: 2fr 1fr 1fr 1fr;
+            }
+        }
+        
+        .model-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .model-filter-label {
+            font-size: clamp(11px, 1.8vw, 12px);
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .model-search-input,
+        .model-filter-select {
+            padding: 8px 10px;
+            font-family: monospace;
+            font-size: clamp(12px, 2vw, 14px);
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #444;
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .model-search-input:focus,
+        .model-filter-select:focus {
+            border-color: #00ff00;
+        }
+        
+        .model-list {
+            display: grid;
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        
+        .model-card {
+            background: #1a1a1a;
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .model-card:hover {
+            border-color: #00ff00;
+            background: #222;
+        }
+        
+        .model-card.selected {
+            border-color: #00ff00;
+            background: #2a3a2a;
+        }
+        
+        .model-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .model-card-name {
+            font-size: clamp(13px, 2vw, 15px);
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .model-card-status {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #00ff00;
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .model-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: clamp(10px, 1.6vw, 11px);
+        }
+        
+        .model-meta-tag {
+            padding: 2px 6px;
+            background: #333;
+            border-radius: 3px;
+            color: #aaa;
+        }
+        
+        .model-card-description {
+            font-size: clamp(10px, 1.6vw, 11px);
+            color: #888;
+            line-height: 1.4;
+        }
+        
+        .model-list-empty {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: clamp(12px, 2vw, 14px);
+        }
+        
+        .model-stats-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid #444;
+            margin-top: 10px;
+            font-size: clamp(10px, 1.6vw, 11px);
+            color: #888;
+        }
+        
+        .filter-reset-btn {
+            padding: 4px 10px;
+            font-size: clamp(10px, 1.6vw, 11px);
+            background: transparent;
+            color: #00ff00;
+            border: 1px solid #444;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        .filter-reset-btn:hover {
+            border-color: #00ff00;
+            background: #2a2a2a;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>WebGPU Camera Test</h1>
+        
+        <!-- Model Selection Panel -->
+        <div class="model-selection-panel">
+            <div class="model-panel-header">
+                <div class="model-panel-title">Model Selection</div>
+                <button class="model-toggle-btn" id="modelPanelToggle">Collapse</button>
+            </div>
+            <div class="model-panel-content" id="modelPanelContent">
+                <!-- Search and Filters -->
+                <div class="model-search-filters">
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Search</label>
+                        <input type="text" class="model-search-input" id="modelSearchInput" placeholder="Search models...">
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Type</label>
+                        <select class="model-filter-select" id="modelTypeFilter">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Architecture</label>
+                        <select class="model-filter-select" id="modelArchFilter">
+                            <option value="">All Architectures</option>
+                        </select>
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Resolution</label>
+                        <select class="model-filter-select" id="modelResolutionFilter">
+                            <option value="">All Resolutions</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Model List -->
+                <div class="model-list" id="modelList">
+                    <div class="model-list-empty">Loading models...</div>
+                </div>
+                
+                <!-- Stats Summary -->
+                <div class="model-stats-summary">
+                    <span id="modelStatsText">0 models available</span>
+                    <button class="filter-reset-btn" id="filterResetBtn">Reset Filters</button>
+                </div>
+            </div>
+        </div>
         
         <div id="videoContainer">
             <video id="video" autoplay playsinline muted></video>
@@ -681,6 +921,9 @@
                 <div>Provider: <span id="provider">--</span></div>
                 <div>Detections: <span id="detectionTotal">0</span></div>
             </div>
+            <div id="modelInfo" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444; font-size: 11px; color: #888; display: none;">
+                <div><span style="color: #00ff00;">Model:</span> <span id="modelInfoText">--</span></div>
+            </div>
         </div>
         
         <!-- Dataset Viewer Container (hidden by default) -->
@@ -765,6 +1008,17 @@
         let tracker = null;
         let trackerType = 'bytetrack';
         
+        // Model management
+        let availableModels = [];
+        let currentModel = null;
+        let filteredModels = [];
+        let modelFilters = {
+            search: '',
+            type: '',
+            architecture: '',
+            resolution: ''
+        };
+        
         // Preprocessing transformation parameters (for coordinate conversion)
         let preprocessParams = {
             scale: 1.0,
@@ -820,6 +1074,8 @@
         const detectionTotalEl = document.getElementById('detectionTotal');
         const thresholdValueEl = document.getElementById('thresholdValue');
         const detectionCountEl = document.getElementById('detectionCount');
+        const modelInfoEl = document.getElementById('modelInfo');
+        const modelInfoTextEl = document.getElementById('modelInfoText');
 
         const runOnceBtn = document.getElementById('runOnce');
         const autoModeBtn = document.getElementById('autoMode');
@@ -830,6 +1086,17 @@
         const enableTrackingCheckbox = document.getElementById('enableTracking');
         const thresholdInput = document.getElementById('threshold');
         const trackerTypeSelect = document.getElementById('trackerType');
+        
+        // Model selection panel elements
+        const modelPanelToggle = document.getElementById('modelPanelToggle');
+        const modelPanelContent = document.getElementById('modelPanelContent');
+        const modelSearchInput = document.getElementById('modelSearchInput');
+        const modelTypeFilter = document.getElementById('modelTypeFilter');
+        const modelArchFilter = document.getElementById('modelArchFilter');
+        const modelResolutionFilter = document.getElementById('modelResolutionFilter');
+        const modelList = document.getElementById('modelList');
+        const modelStatsText = document.getElementById('modelStatsText');
+        const filterResetBtn = document.getElementById('filterResetBtn');
 
         // ============================================================================
         // DATASET MANAGEMENT
@@ -1014,10 +1281,193 @@
         }
 
         // ============================================================================
-        // MODEL LOADING
+        // MODEL MANAGEMENT
         // ============================================================================
-        async function loadModel() {
-            modelLogger.info('loadModel', 'Starting model loading');
+        async function loadModelRegistry() {
+            modelLogger.info('loadModelRegistry', 'Loading model registry');
+            
+            try {
+                const response = await fetch('/models/models.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch models.json: ${response.statusText}`);
+                }
+                
+                const registry = await response.json();
+                availableModels = registry.models;
+                filteredModels = [...availableModels];
+                
+                modelLogger.info('loadModelRegistry', `Loaded ${availableModels.length} models from registry`);
+                
+                // Populate filter dropdowns
+                populateFilters();
+                
+                // Render model list
+                renderModelList();
+                
+                // Select first model by default
+                if (availableModels.length > 0) {
+                    currentModel = availableModels[0];
+                    modelLogger.info('loadModelRegistry', `Default model selected: ${currentModel.name}`);
+                }
+                
+            } catch (error) {
+                modelLogger.error('loadModelRegistry', `Failed to load model registry: ${error.message}`, error);
+                modelList.innerHTML = '<div class="model-list-empty">Error loading models</div>';
+                statusText.textContent = `Error loading model registry: ${error.message}`;
+            }
+        }
+        
+        function populateFilters() {
+            // Extract unique values for each filter
+            const types = [...new Set(availableModels.map(m => m.type))].sort();
+            const architectures = [...new Set(availableModels.map(m => m.architecture))].sort();
+            const resolutions = [...new Set(availableModels.map(m => m.resolution))].sort((a, b) => a - b);
+            
+            // Populate type filter
+            modelTypeFilter.innerHTML = '<option value="">All Types</option>';
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.toUpperCase();
+                modelTypeFilter.appendChild(option);
+            });
+            
+            // Populate architecture filter
+            modelArchFilter.innerHTML = '<option value="">All Architectures</option>';
+            architectures.forEach(arch => {
+                const option = document.createElement('option');
+                option.value = arch;
+                option.textContent = arch;
+                modelArchFilter.appendChild(option);
+            });
+            
+            // Populate resolution filter
+            modelResolutionFilter.innerHTML = '<option value="">All Resolutions</option>';
+            resolutions.forEach(res => {
+                const option = document.createElement('option');
+                option.value = res;
+                option.textContent = `${res}px`;
+                modelResolutionFilter.appendChild(option);
+            });
+            
+            modelLogger.info('populateFilters', `Populated filters: ${types.length} types, ${architectures.length} architectures, ${resolutions.length} resolutions`);
+        }
+        
+        function applyFilters() {
+            filteredModels = availableModels.filter(model => {
+                // Search filter
+                if (modelFilters.search) {
+                    const searchLower = modelFilters.search.toLowerCase();
+                    const matchesSearch = 
+                        model.name.toLowerCase().includes(searchLower) ||
+                        model.description.toLowerCase().includes(searchLower) ||
+                        model.architecture.toLowerCase().includes(searchLower) ||
+                        model.classes.some(c => c.toLowerCase().includes(searchLower));
+                    
+                    if (!matchesSearch) return false;
+                }
+                
+                // Type filter
+                if (modelFilters.type && model.type !== modelFilters.type) {
+                    return false;
+                }
+                
+                // Architecture filter
+                if (modelFilters.architecture && model.architecture !== modelFilters.architecture) {
+                    return false;
+                }
+                
+                // Resolution filter
+                if (modelFilters.resolution && model.resolution !== parseInt(modelFilters.resolution)) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            renderModelList();
+            modelLogger.debug('applyFilters', `Filtered ${filteredModels.length}/${availableModels.length} models`, modelFilters);
+        }
+        
+        function renderModelList() {
+            if (filteredModels.length === 0) {
+                modelList.innerHTML = '<div class="model-list-empty">No models match your filters</div>';
+                modelStatsText.textContent = '0 models found';
+                return;
+            }
+            
+            modelList.innerHTML = '';
+            
+            filteredModels.forEach(model => {
+                const card = document.createElement('div');
+                card.className = 'model-card';
+                if (currentModel && currentModel.id === model.id) {
+                    card.classList.add('selected');
+                }
+                
+                const isActive = currentModel && currentModel.id === model.id;
+                
+                card.innerHTML = `
+                    <div class="model-card-header">
+                        <div class="model-card-name">${model.name}</div>
+                        ${isActive ? '<div class="model-card-status">ACTIVE</div>' : ''}
+                    </div>
+                    <div class="model-card-meta">
+                        <span class="model-meta-tag">${model.type.toUpperCase()}</span>
+                        <span class="model-meta-tag">${model.architecture}</span>
+                        <span class="model-meta-tag">${model.resolution}px</span>
+                        <span class="model-meta-tag">${model.classCount} class${model.classCount !== 1 ? 'es' : ''}</span>
+                    </div>
+                    <div class="model-card-description">${model.description}</div>
+                `;
+                
+                card.addEventListener('click', () => selectModel(model));
+                
+                modelList.appendChild(card);
+            });
+            
+            modelStatsText.textContent = `${filteredModels.length} model${filteredModels.length !== 1 ? 's' : ''} available`;
+        }
+        
+        async function selectModel(model) {
+            if (currentModel && currentModel.id === model.id) {
+                modelLogger.info('selectModel', `Model ${model.name} already loaded`);
+                return;
+            }
+            
+            modelLogger.info('selectModel', `User selected model: ${model.name}`);
+            
+            // Clear current detections
+            detections = [];
+            drawDetections();
+            updateStats();
+            
+            // Load the new model
+            await loadModel(model);
+            
+            // Re-render to update active status
+            renderModelList();
+        }
+        
+        function resetFilters() {
+            modelFilters = {
+                search: '',
+                type: '',
+                architecture: '',
+                resolution: ''
+            };
+            
+            modelSearchInput.value = '';
+            modelTypeFilter.value = '';
+            modelArchFilter.value = '';
+            modelResolutionFilter.value = '';
+            
+            applyFilters();
+            modelLogger.info('resetFilters', 'Filters reset');
+        }
+        
+        async function loadModel(modelConfig) {
+            modelLogger.info('loadModel', `Starting model loading: ${modelConfig.name}`);
             
             if (!window.ort) {
                 modelLogger.error('loadModel', 'ONNX Runtime not available in window object');
@@ -1026,13 +1476,31 @@
             }
 
             modelLogger.debug('loadModel', `ONNX Runtime version: ${ort.env.versions.common}`);
+            modelLogger.debug('loadModel', 'Model configuration', modelConfig);
 
             try {
-                statusText.textContent = 'Loading model...';
+                // Stop auto mode if running
+                if (autoMode) {
+                    autoMode = false;
+                    autoModeBtn.textContent = 'Start Auto';
+                    autoModeBtn.classList.remove('stop');
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                }
+                
+                // Disable buttons during loading
+                runOnceBtn.disabled = true;
+                autoModeBtn.disabled = true;
+                modelPanelToggle.disabled = true;
+                modelList.style.pointerEvents = 'none';
+                
+                statusText.textContent = `Loading ${modelConfig.name}...`;
                 modelLogger.info('loadModel', 'Creating inference session with WebGPU (no fallback)');
 
                 const startTime = performance.now();
-                session = await ort.InferenceSession.create('/models/trading_card_detector.onnx', {
+                session = await ort.InferenceSession.create(modelConfig.path, {
                     executionProviders: ['webgpu'],
                     graphOptimizationLevel: 'all'
                 });
@@ -1040,22 +1508,34 @@
                 const loadTime = performance.now() - startTime;
                 modelLogger.info('loadModel', `Model loaded successfully in ${loadTime.toFixed(2)}ms`);
                 
+                // Update current model
+                currentModel = modelConfig;
+                
+                // Update preprocessing params with model resolution
+                preprocessParams.targetSize = modelConfig.resolution;
+                
                 // Log model details
                 const modelInfo = {
                     inputNames: session.inputNames,
                     outputNames: session.outputNames,
-                    inputTypes: session.inputNames.map(name => {
-                        const input = session._model?.graph?.input?.find(i => i.name === name);
-                        return input?.type?.tensorType?.elemType || 'unknown';
-                    })
+                    modelType: modelConfig.type,
+                    resolution: modelConfig.resolution,
+                    architecture: modelConfig.architecture,
+                    classes: modelConfig.classes
                 };
-                modelLogger.debug('loadModel', 'Model metadata', modelInfo);
+                modelLogger.info('loadModel', 'Model metadata', modelInfo);
                 
-                statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                statusText.textContent = `${modelConfig.name} ready - Click Start Auto or Run Once`;
                 providerEl.textContent = 'WebGPU';
+                
+                // Update model info display
+                modelInfoEl.style.display = 'block';
+                modelInfoTextEl.textContent = `${modelConfig.architecture} | ${modelConfig.resolution}px | ${modelConfig.type.toUpperCase()} | ${modelConfig.classes.join(', ')}`;
                 
                 runOnceBtn.disabled = false;
                 autoModeBtn.disabled = false;
+                modelPanelToggle.disabled = false;
+                modelList.style.pointerEvents = '';
                 
                 modelLogger.info('loadModel', 'Model initialization complete');
             } catch (error) {
@@ -1064,6 +1544,8 @@
                     stack: error.stack
                 });
                 statusText.textContent = `Model load error: ${error.message}`;
+                modelPanelToggle.disabled = false;
+                modelList.style.pointerEvents = '';
             }
         }
 
@@ -1074,7 +1556,7 @@
             // inferenceLogger.debug('preprocessImage', `Starting preprocessing of ${imageData.width}x${imageData.height} image`);
             
             const { width, height } = imageData;
-            const targetSize = 1088;
+            const targetSize = currentModel ? currentModel.resolution : 1088;
 
             const scale = Math.min(targetSize / width, targetSize / height);
             const newW = Math.round(width * scale);
@@ -1206,13 +1688,14 @@
                 //    valuesPerDetection: outputShape[2]
                 //});
 
-                // Parse OBB format: [batch, num_detections, 7]
-                // Each detection: [x_center, y_center, width, height, confidence, class_id, angle]
+                // Parse output format based on model type
                 const numDetections = outputShape[1];
                 const valuesPerDetection = outputShape[2];
                 
-                if (valuesPerDetection !== 7) {
-                    inferenceLogger.warning('runInference', `Expected 7 values per detection, got ${valuesPerDetection}`);
+                // Validate against model metadata
+                const expectedValues = currentModel ? currentModel.valuesPerDetection : 7;
+                if (valuesPerDetection !== expectedValues) {
+                    inferenceLogger.warning('runInference', `Expected ${expectedValues} values per detection (${currentModel.outputFormat}), got ${valuesPerDetection}`);
                 }
 
                 // Process detections
@@ -1221,33 +1704,107 @@
                 
                 for (let i = 0; i < numDetections; i++) {
                     const offset = i * valuesPerDetection;
-                    const x_1088 = outputData[offset];
-                    const y_1088 = outputData[offset + 1];
-                    const w_1088 = outputData[offset + 2];
-                    const h_1088 = outputData[offset + 3];
+                    const val0 = outputData[offset];
+                    const val1 = outputData[offset + 1];
+                    const val2 = outputData[offset + 2];
+                    const val3 = outputData[offset + 3];
                     const confidence = outputData[offset + 4];
                     const classId = outputData[offset + 5];
-                    const angle = outputData[offset + 6];
+                    
+                    // Angle only exists for OBB models (7 values per detection)
+                    const angle = (valuesPerDetection >= 7) ? outputData[offset + 6] : 0;
+                    const isOBB = currentModel && currentModel.type === 'obb';
                     
                     if (confidence >= minConfidence) {
-                        // Transform coordinates from 1088x1088 padded space back to original video space
-                        // Step 1: Remove padding
-                        const x_scaled = x_1088 - preprocessParams.padX;
-                        const y_scaled = y_1088 - preprocessParams.padY;
-                        const w_scaled = w_1088;
-                        const h_scaled = h_1088;
+                        // Parse coordinates based on model type
+                        // OBB models output: [cx, cy, w, h, conf, class, angle]
+                        // Detection models with NMS output: [x1, y1, x2, y2, conf, class]
+                        let cx_model, cy_model, w_model, h_model;
+                        
+                        if (isOBB) {
+                            // OBB format: center coordinates + dimensions
+                            cx_model = val0;
+                            cy_model = val1;
+                            w_model = val2;
+                            h_model = val3;
+                        } else {
+                            // Detection format: corner coordinates (x1, y1, x2, y2)
+                            const x1 = val0;
+                            const y1 = val1;
+                            const x2 = val2;
+                            const y2 = val3;
+                            cx_model = (x1 + x2) / 2;
+                            cy_model = (y1 + y2) / 2;
+                            w_model = x2 - x1;
+                            h_model = y2 - y1;
+                        }
+                        
+                        // Debug logging for first detection
+                        if (i === 0) {
+                            console.log(`=== MODEL OUTPUT (${preprocessParams.targetSize}x${preprocessParams.targetSize} space) ===`);
+                            console.log('Raw values:', {
+                                format: isOBB ? 'cx,cy,w,h' : 'x1,y1,x2,y2',
+                                val0: val0.toFixed(2),
+                                val1: val1.toFixed(2),
+                                val2: val2.toFixed(2),
+                                val3: val3.toFixed(2),
+                                parsed: {
+                                    cx: cx_model.toFixed(2),
+                                    cy: cy_model.toFixed(2),
+                                    w: w_model.toFixed(2),
+                                    h: h_model.toFixed(2)
+                                }
+                            });
+                        }
+                        
+                        // Transform coordinates from model's padded space back to original video space
+                        // Step 1: Remove padding from center coordinates
+                        const cx_scaled = cx_model - preprocessParams.padX;
+                        const cy_scaled = cy_model - preprocessParams.padY;
+                        const w_scaled = w_model;
+                        const h_scaled = h_model;
+                        
+                        if (i === 0) {
+                            console.log('After removing padding:', {
+                                cx_scaled: cx_scaled.toFixed(2),
+                                cy_scaled: cy_scaled.toFixed(2),
+                                w_scaled: w_scaled.toFixed(2),
+                                h_scaled: h_scaled.toFixed(2)
+                            });
+                        }
                         
                         // Step 2: Scale back to original dimensions
-                        const x_original = x_scaled / preprocessParams.scale;
-                        const y_original = y_scaled / preprocessParams.scale;
+                        const cx_original = cx_scaled / preprocessParams.scale;
+                        const cy_original = cy_scaled / preprocessParams.scale;
                         const w_original = w_scaled / preprocessParams.scale;
                         const h_original = h_scaled / preprocessParams.scale;
                         
+                        if (i === 0) {
+                            console.log('After scaling to original pixels:', {
+                                cx_original: cx_original.toFixed(2),
+                                cy_original: cy_original.toFixed(2),
+                                w_original: w_original.toFixed(2),
+                                h_original: h_original.toFixed(2),
+                                aspectRatio_pixels: (w_original / h_original).toFixed(3)
+                            });
+                        }
+                        
                         // Step 3: Normalize to 0-1 range based on original video dimensions
-                        const normalizedX = x_original / preprocessParams.originalWidth;
-                        const normalizedY = y_original / preprocessParams.originalHeight;
+                        const normalizedX = cx_original / preprocessParams.originalWidth;
+                        const normalizedY = cy_original / preprocessParams.originalHeight;
                         const normalizedW = w_original / preprocessParams.originalWidth;
                         const normalizedH = h_original / preprocessParams.originalHeight;
+                        
+                        if (i === 0) {
+                            console.log('After normalizing (0-1 range):', {
+                                normalizedX: normalizedX.toFixed(4),
+                                normalizedY: normalizedY.toFixed(4),
+                                normalizedW: normalizedW.toFixed(4),
+                                normalizedH: normalizedH.toFixed(4),
+                                'aspectRatio (normalized)': (normalizedW / normalizedH).toFixed(3),
+                                'aspectRatio (pixels)': (w_original / h_original).toFixed(3)
+                            });
+                        }
                         
                         detections.push({
                             x: normalizedX,
@@ -1256,7 +1813,8 @@
                             height: normalizedH,
                             confidence: confidence,
                             classId: classId,
-                            angle: angle
+                            angle: angle,
+                            isOBB: isOBB
                         });
                     }
                 }
@@ -1312,31 +1870,53 @@
                 const h = det.height * overlayCanvas.height;
                 const angle = det.angle || 0;
 
-                overlayCtx.save();
-                
-                // Move to center of box and rotate
-                overlayCtx.translate(centerX, centerY);
-                overlayCtx.rotate(angle);
-                
-                // Draw rotated rectangle (centered at origin after translate)
-                overlayCtx.strokeStyle = '#00ff00';
-                overlayCtx.lineWidth = 3;
-                overlayCtx.strokeRect(-w/2, -h/2, w, h);
-                
-                // Draw confidence label (unrotated for readability)
-                overlayCtx.rotate(-angle);
-                overlayCtx.fillStyle = '#00ff00';
-                overlayCtx.font = '16px monospace';
-                
-                // Show track ID if tracking is enabled, otherwise just confidence
-                let label;
-                if (trackingEnabled && det.trackId !== undefined) {
-                    label = `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
-                } else {
-                    label = `${(det.confidence * 100).toFixed(0)}%`;
+                // Get class name from model configuration
+                let className = '';
+                if (currentModel && currentModel.classes && det.classId !== undefined) {
+                    const classIndex = Math.floor(det.classId);
+                    if (classIndex >= 0 && classIndex < currentModel.classes.length) {
+                        className = currentModel.classes[classIndex];
+                    }
                 }
                 
-                overlayCtx.fillText(label, -w/2, -h/2 - 5);
+                // Build label: [class] [trackID] confidence%
+                let label;
+                if (trackingEnabled && det.trackId !== undefined) {
+                    label = className ? `${className} ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%` : `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
+                } else {
+                    label = className ? `${className} ${(det.confidence * 100).toFixed(0)}%` : `${(det.confidence * 100).toFixed(0)}%`;
+                }
+
+                overlayCtx.save();
+                
+                if (det.isOBB && angle !== 0) {
+                    // Draw OBB (Oriented Bounding Box) - rotated rectangle
+                    overlayCtx.translate(centerX, centerY);
+                    overlayCtx.rotate(angle);
+                    
+                    overlayCtx.strokeStyle = '#00ff00';
+                    overlayCtx.lineWidth = 3;
+                    overlayCtx.strokeRect(-w/2, -h/2, w, h);
+                    
+                    // Draw label (unrotated for readability)
+                    overlayCtx.rotate(-angle);
+                    overlayCtx.fillStyle = '#00ff00';
+                    overlayCtx.font = '16px monospace';
+                    overlayCtx.fillText(label, -w/2, -h/2 - 5);
+                } else {
+                    // Draw regular bounding box (axis-aligned rectangle)
+                    const x = centerX - w/2;
+                    const y = centerY - h/2;
+                    
+                    overlayCtx.strokeStyle = '#00ff00';
+                    overlayCtx.lineWidth = 3;
+                    overlayCtx.strokeRect(x, y, w, h);
+                    
+                    // Draw label
+                    overlayCtx.fillStyle = '#00ff00';
+                    overlayCtx.font = '16px monospace';
+                    overlayCtx.fillText(label, x, y - 5);
+                }
                 
                 overlayCtx.restore();
             });
@@ -1699,6 +2279,45 @@
             }
         });
 
+        // Model panel toggle
+        modelPanelToggle.addEventListener('click', () => {
+            modelPanelContent.classList.toggle('collapsed');
+            modelPanelToggle.textContent = modelPanelContent.classList.contains('collapsed') ? 'Expand' : 'Collapse';
+            uiLogger.info('modelPanelToggle.click', `Model panel ${modelPanelContent.classList.contains('collapsed') ? 'collapsed' : 'expanded'}`);
+        });
+        
+        // Search input
+        modelSearchInput.addEventListener('input', (e) => {
+            modelFilters.search = e.target.value;
+            applyFilters();
+        });
+        
+        // Type filter
+        modelTypeFilter.addEventListener('change', (e) => {
+            modelFilters.type = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelTypeFilter.change', `Type filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Architecture filter
+        modelArchFilter.addEventListener('change', (e) => {
+            modelFilters.architecture = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelArchFilter.change', `Architecture filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Resolution filter
+        modelResolutionFilter.addEventListener('change', (e) => {
+            modelFilters.resolution = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelResolutionFilter.change', `Resolution filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Reset filters button
+        filterResetBtn.addEventListener('click', () => {
+            resetFilters();
+        });
+
         // ============================================================================
         // BYTETRACK PARAMETER SLIDERS
         // ============================================================================
@@ -1846,8 +2465,20 @@
             }
         });
         
-        initCamera();
-        loadModel();
+        // Initialize application
+        async function initializeApp() {
+            await initCamera();
+            await loadModelRegistry();
+            
+            if (currentModel) {
+                await loadModel(currentModel);
+            } else {
+                mainLogger.error('init', 'No models available to load');
+                statusText.textContent = 'Error: No models available';
+            }
+        }
+        
+        initializeApp();
     </script>
 </body>
 </html>

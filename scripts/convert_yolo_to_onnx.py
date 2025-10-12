@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import json
 import time
+import argparse
 from pathlib import Path
 from ultralytics import YOLO
 import onnxruntime as ort
@@ -386,14 +387,15 @@ def test_inference_on_image(model_path, onnx_path, image_path, output_dir):
         traceback.print_exc()
         return None
 
-def convert_yolo_to_onnx(model_path, output_dir, input_size=1088):
+def convert_yolo_to_onnx(model_path, output_dir, output_name=None, input_size=1088):
     """
     Convert YOLO model to ONNX format
     
     Args:
         model_path: Path to the .pt model file
         output_dir: Directory to save the ONNX model
-        input_size: Input image size (default: 640)
+        output_name: Custom output filename (optional, defaults to model basename)
+        input_size: Input image size (default: 1088)
     """
     
     print(f"Loading YOLO model from: {model_path}")
@@ -404,8 +406,13 @@ def convert_yolo_to_onnx(model_path, output_dir, input_size=1088):
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
+    # Determine output filename
+    if output_name is None:
+        model_basename = os.path.splitext(os.path.basename(model_path))[0]
+        output_name = f"{model_basename}.onnx"
+    
     # Convert to ONNX
-    onnx_path = os.path.join(output_dir, "trading_card_detector.onnx")
+    onnx_path = os.path.join(output_dir, output_name)
     
     print(f"Converting to ONNX format...")
     print(f"Input size: {input_size}x{input_size}")
@@ -415,7 +422,7 @@ def convert_yolo_to_onnx(model_path, output_dir, input_size=1088):
         # Export to ONNX with NMS (working configuration)
         success = model.export(
             format="onnx",
-            imgsz=1088,
+            imgsz=input_size,
             optimize=True,
             half=False,  # Use FP32 for better web compatibility
             dynamic=False,  # Fixed input size for web deployment
@@ -449,53 +456,84 @@ def convert_yolo_to_onnx(model_path, output_dir, input_size=1088):
         return None
 
 def main():
-    # Paths
-    model_path = "/home/alec/git/pokemon/src/training/trading_cards_obb/yolo11n_obb_v15/weights/best.pt"
-    output_dir = "/home/alec/git/pokemon/frontend/public/models"
-    test_image_path = "/home/alec/git/pokemon/data/gold/images/20250927_104620.jpg"
+    parser = argparse.ArgumentParser(
+        description="Convert YOLO models to ONNX format for web deployment"
+    )
+    parser.add_argument(
+        "model_path",
+        type=str,
+        help="Path to the .pt model file"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="/home/alec/git/pokemon/frontend/build/models",
+        help="Directory to save the ONNX model (default: frontend/build/models)"
+    )
+    parser.add_argument(
+        "--output-name",
+        type=str,
+        default=None,
+        help="Custom output filename (default: model basename with .onnx extension)"
+    )
+    parser.add_argument(
+        "--input-size",
+        type=int,
+        default=1088,
+        help="Input image size (default: 1088)"
+    )
+    parser.add_argument(
+        "--test-image",
+        type=str,
+        default=None,
+        help="Path to test image for inference comparison (optional)"
+    )
+    parser.add_argument(
+        "--skip-test",
+        action="store_true",
+        help="Skip inference testing"
+    )
     
-    print("🚀 YOLO to ONNX Converter with Inference Testing")
+    args = parser.parse_args()
+    
+    print("🚀 YOLO to ONNX Converter")
     print("=" * 60)
     
     # Check if model exists
-    if not os.path.exists(model_path):
-        print(f"❌ Model file not found: {model_path}")
+    if not os.path.exists(args.model_path):
+        print(f"❌ Model file not found: {args.model_path}")
         sys.exit(1)
     
     # Convert the model
-    onnx_path = convert_yolo_to_onnx(model_path, output_dir)
+    onnx_path = convert_yolo_to_onnx(
+        args.model_path, 
+        args.output_dir, 
+        args.output_name,
+        args.input_size
+    )
     
     if onnx_path:
         print("\n✅ Conversion completed successfully!")
         print(f"📁 ONNX model saved to: {onnx_path}")
-        print(f"🌐 Frontend will load from: /models/trading_card_detector.onnx")
         
-        # Create a simple info file
-        info_path = os.path.join(output_dir, "model_info.json")
-        model_info = {
-            "name": "Trading Card Detector",
-            "version": "1.0.0",
-            "format": "ONNX",
-            "input_size": 1088,
-            "source_model": model_path,
-            "classes": ["trading_card"],  # Update with actual class names
-            "description": "YOLO11n OBB model for trading card detection"
-        }
-        
-        with open(info_path, 'w') as f:
-            json.dump(model_info, f, indent=2)
-        
-        print(f"📋 Model info saved to: {info_path}")
-        
-        # Test inference on cam.png
-        print(f"\n🧪 Running inference tests...")
-        test_results = test_inference_on_image(model_path, onnx_path, test_image_path, output_dir)
-        
-        if test_results:
-            print(f"\n✅ Inference testing completed!")
-            print(f"📊 Check {output_dir}/inference_test/ for visualization results")
-        else:
-            print(f"\n⚠️  Inference testing had issues, but conversion was successful")
+        # Test inference if test image provided and not skipped
+        if args.test_image and not args.skip_test:
+            if os.path.exists(args.test_image):
+                print(f"\n🧪 Running inference tests...")
+                test_results = test_inference_on_image(
+                    args.model_path, 
+                    onnx_path, 
+                    args.test_image, 
+                    args.output_dir
+                )
+                
+                if test_results:
+                    print(f"\n✅ Inference testing completed!")
+                    print(f"📊 Check {args.output_dir}/inference_test/ for visualization results")
+                else:
+                    print(f"\n⚠️  Inference testing had issues, but conversion was successful")
+            else:
+                print(f"\n⚠️  Test image not found: {args.test_image}")
         
     else:
         print("\n❌ Conversion failed!")

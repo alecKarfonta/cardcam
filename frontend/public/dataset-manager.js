@@ -11,35 +11,81 @@
  */
 class BoundingBox {
     constructor(x, y, width, height, rotation = 0, confidence = 1.0) {
-        this.x = x;           // Center X (normalized 0-1)
-        this.y = y;           // Center Y (normalized 0-1)
-        this.width = width;   // Width (normalized 0-1)
-        this.height = height; // Height (normalized 0-1)
+        this.x = x;           // Center X (normalized 0-1 by image width)
+        this.y = y;           // Center Y (normalized 0-1 by image height)
+        this.width = width;   // Width (normalized 0-1 by image width)
+        this.height = height; // Height (normalized 0-1 by image height)
         this.rotation = rotation; // Rotation in radians
         this.confidence = confidence;
         this.classId = 0;     // Default class ID
+        this.imageAspectRatio = null; // Will be set when needed for proper rotation
+    }
+    
+    /**
+     * Set the image aspect ratio (width/height) for proper corner calculation
+     */
+    setImageAspectRatio(aspectRatio) {
+        this.imageAspectRatio = aspectRatio;
     }
 
     /**
      * Get the four corners of the rotated bounding box
+     * Returns corners in normalized coordinates (0-1 range)
+     * 
+     * IMPORTANT: width is normalized by image width, height by image height.
+     * When the image aspect ratio != 1.0, rotation must account for this
+     * to avoid distortion.
+     * 
+     * @param imageAspectRatio - The width/height ratio of the image
+     * @param applyCorrection - Whether to apply aspect ratio correction (default: true)
+     *                          Set to false when rendering with different X/Y scale factors
      */
-    getCorners() {
+    getCorners(imageAspectRatio = 1.778, applyCorrection = true) {
+        // Use stored aspect ratio if available, otherwise use provided or default
+        const aspectRatio = this.imageAspectRatio || imageAspectRatio;
+        
         const cos = Math.cos(this.rotation);
         const sin = Math.sin(this.rotation);
         const hw = this.width / 2;
         const hh = this.height / 2;
 
+        if (!applyCorrection) {
+            // No aspect ratio correction - use coordinates as-is
+            // This is used when rendering where X and Y are scaled differently
+            const corners = [
+                [-hw, -hh],
+                [hw, -hh],
+                [hw, hh],
+                [-hw, hh]
+            ];
+
+            return corners.map(([px, py]) => {
+                // Rotate without correction
+                const rx = px * cos - py * sin;
+                const ry = px * sin + py * cos;
+                return [this.x + rx, this.y + ry];
+            });
+        }
+
+        // Scale width DOWN by aspect ratio to get into square coordinate space
+        // where 1 unit horizontally = 1 unit vertically in physical space
+        // Since width is normalized by a larger dimension (1920), we need to shrink it
+        const hw_scaled = hw / aspectRatio;
+
         const corners = [
-            [-hw, -hh],
-            [hw, -hh],
-            [hw, hh],
-            [-hw, hh]
+            [-hw_scaled, -hh],
+            [hw_scaled, -hh],
+            [hw_scaled, hh],
+            [-hw_scaled, hh]
         ];
 
         return corners.map(([px, py]) => {
+            // Rotate in square coordinate space
             const rx = px * cos - py * sin;
             const ry = px * sin + py * cos;
-            return [this.x + rx, this.y + ry];
+            
+            // Scale back to normalized coordinates (scale X component back up)
+            return [this.x + (rx * aspectRatio), this.y + ry];
         });
     }
 

@@ -347,7 +347,18 @@ class DatasetViewer {
                 canvas.width = maxHeight * imgAspect;
             }
 
-            console.log('Creating BoundingBoxEditor', { canvasWidth: canvas.width, canvasHeight: canvas.height });
+            // Also set CSS dimensions to match canvas resolution
+            // This prevents the browser from stretching the canvas
+            canvas.style.width = canvas.width + 'px';
+            canvas.style.height = canvas.height + 'px';
+
+            console.log('Creating BoundingBoxEditor', { 
+                canvasWidth: canvas.width, 
+                canvasHeight: canvas.height,
+                imgAspect: imgAspect.toFixed(3),
+                imageNaturalWidth: image.naturalWidth,
+                imageNaturalHeight: image.naturalHeight
+            });
             
             this.editor = new BoundingBoxEditor(canvas, image);
             

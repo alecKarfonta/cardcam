@@ -1,0 +1,63 @@
+{
+  "models": [
+    {
+      "id": "trading_card_obb_v1",
+      "name": "Trading Card Detector (OBB)",
+      "path": "/models/trading_card_detector.onnx",
+      "type": "obb",
+      "resolution": 1088,
+      "architecture": "YOLOv12n",
+      "classes": ["trading_card"],
+      "classCount": 1,
+      "description": "Single-class oriented bounding box model for detecting trading cards at any angle. Trained on YOLOv12n architecture with 1088px input resolution.",
+      "outputFormat": "obb",
+      "valuesPerDetection": 7,
+      "coordinateFormat": "center_xywh_angle"
+    },
+    {
+      "id": "yolo12n",
+      "name": "YOLOv12n - Nano",
+      "path": "/models/yolo12n.onnx",
+      "type": "detect",
+      "resolution": 640,
+      "architecture": "YOLOv12n",
+      "classes": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"],
+      "classCount": 80,
+      "description": "YOLOv12 Nano model (2.6M parameters, 6.5 GFLOPs). Fastest model with smallest size (10.55 MB). Trained on COCO dataset with 80 object classes.",
+      "outputFormat": "detect",
+      "valuesPerDetection": 6,
+      "coordinateFormat": "center_xywh_conf_class"
+    },
+    {
+      "id": "yolo12m",
+      "name": "YOLOv12m - Medium",
+      "path": "/models/yolo12m.onnx",
+      "type": "detect",
+      "resolution": 640,
+      "architecture": "YOLOv12m",
+      "classes": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"],
+      "classCount": 80,
+      "description": "YOLOv12 Medium model (20.2M parameters, 67.5 GFLOPs). Balanced performance between speed and accuracy (77.61 MB). Trained on COCO dataset with 80 object classes.",
+      "outputFormat": "detect",
+      "valuesPerDetection": 6,
+      "coordinateFormat": "center_xywh_conf_class"
+    },
+    {
+      "id": "yolo12x",
+      "name": "YOLOv12x - Extra Large",
+      "path": "/models/yolo12x.onnx",
+      "type": "detect",
+      "resolution": 640,
+      "architecture": "YOLOv12x",
+      "classes": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"],
+      "classCount": 80,
+      "description": "YOLOv12 Extra Large model (59.1M parameters, 199.0 GFLOPs). Most accurate model with highest quality detections (226.40 MB). Trained on COCO dataset with 80 object classes.",
+      "outputFormat": "detect",
+      "valuesPerDetection": 6,
+      "coordinateFormat": "center_xywh_conf_class"
+    }
+  ],
+  "version": "1.1.0",
+  "description": "Model registry for WebGPU inference"
+}
+
