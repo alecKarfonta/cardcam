@@ -1,43 +1,2485 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <!-- ONNX Runtime WebGPU build -->
+    <script src="onnx/ort.webgpu.min.js"></script>
+    <!-- Multi-Algorithm Object Tracking -->
+    <script src="object_tracking.js"></script>
+    <!-- Dataset Management System -->
+    <script src="dataset-storage.js"></script>
+    <script src="dataset-manager.js"></script>
+    <script src="bbox-editor.js"></script>
+    <script src="dataset-viewer.js"></script>
+    <link rel="stylesheet" href="dataset-viewer.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: clamp(10px, 2vw, 20px);
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            min-height: 100vh;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: clamp(10px, 2vh, 20px);
+            font-size: clamp(20px, 4vw, 32px);
+        }
+        
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            max-width: min(90vw, 1280px);
+            margin: 0 auto clamp(10px, 2vh, 20px);
+            border: 2px solid #00ff00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+        
+        video {
+            max-width: 100%;
+            max-height: 80vh;
+            width: auto;
+            height: auto;
+            display: block;
+        }
+        
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        #overlayCanvas {
+            pointer-events: none;
+        }
+        
+        #hiddenCanvas {
+            display: none;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-bottom: clamp(10px, 2vh, 20px);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(5px, 1vw, 10px);
+            padding: 0 10px;
+        }
+        
+        button {
+            padding: clamp(10px, 2vw, 15px) clamp(15px, 3vw, 30px);
+            font-size: clamp(12px, 2vw, 16px);
+            font-family: monospace;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: #00ff00;
+            color: #000;
+            white-space: nowrap;
+            min-width: fit-content;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        button.stop {
+            background: #ff0000;
+        }
+        
+        .controls label {
+            font-size: clamp(11px, 1.8vw, 14px);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .controls input[type="checkbox"] {
+            cursor: pointer;
+            width: clamp(14px, 2vw, 18px);
+            height: clamp(14px, 2vw, 18px);
+        }
+        
+        .slider-container {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: clamp(10px, 2vw, 15px);
+            margin: clamp(10px, 2vh, 20px) auto;
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .slider-title {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: clamp(14px, 2.5vw, 18px);
+        }
+        
+        .slider-controls {
+            display: flex;
+            align-items: center;
+            gap: clamp(5px, 1vw, 10px);
+        }
+        
+        .slider-controls span {
+            font-size: clamp(10px, 1.8vw, 14px);
+            min-width: fit-content;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            min-width: 100px;
+        }
+        
+        .slider-value {
+            text-align: center;
+            font-size: clamp(16px, 3vw, 20px);
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .detection-count {
+            text-align: center;
+            font-size: clamp(10px, 1.8vw, 12px);
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        #status {
+            text-align: center;
+            margin-top: clamp(10px, 2vh, 20px);
+            padding: clamp(8px, 1.5vw, 12px);
+            background: #2a2a2a;
+            border-radius: 5px;
+        }
+        
+        #statusText {
+            font-size: clamp(12px, 2vw, 16px);
+        }
+        
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: clamp(10px, 2vw, 20px);
+            margin-top: 10px;
+            font-size: clamp(11px, 1.8vw, 14px);
+        }
+        
+        .tracking-params {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: clamp(10px, 2vw, 15px);
+            margin: clamp(10px, 2vh, 20px) auto;
+            width: 90%;
+            max-width: 700px;
+            display: none;
+        }
+        
+        .tracking-params.visible {
+            display: block;
+        }
+        
+        .tracking-params h3 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: clamp(10px, 2vh, 15px);
+            font-size: clamp(16px, 2.5vw, 20px);
+        }
+        
+        .param-group {
+            margin-bottom: clamp(10px, 2vh, 15px);
+            padding-bottom: clamp(10px, 2vh, 15px);
+            border-bottom: 1px solid #444;
+        }
+        
+        .param-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: clamp(12px, 2vw, 14px);
+            gap: 10px;
+        }
+        
+        .param-label span:first-child {
+            flex: 1;
+        }
+        
+        .param-value {
+            color: #00ff00;
+            font-size: clamp(14px, 2.2vw, 16px);
+            white-space: nowrap;
+        }
+        
+        .param-description {
+            font-size: clamp(10px, 1.6vw, 11px);
+            color: #888;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .param-slider {
+            width: 100%;
+            height: 6px;
+        }
+        
+        /* Landscape orientation optimization */
+        @media (orientation: landscape) and (max-height: 700px) {
+            body {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: clamp(18px, 3vw, 24px);
+                margin-bottom: 10px;
+            }
+            
+            #videoContainer {
+                max-width: min(60vw, 1280px);
+            }
+            
+            .container {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto 1fr;
+                gap: 15px;
+                max-width: 100%;
+            }
+            
+            h1 {
+                grid-column: 1 / -1;
+            }
+            
+            #videoContainer {
+                grid-column: 1;
+                grid-row: 2 / -1;
+                margin: 0;
+            }
+            
+            .controls,
+            .slider-container,
+            .tracking-params,
+            #status {
+                grid-column: 2;
+                margin: 0;
+            }
+            
+            #datasetViewerContainer {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        /* Mobile portrait - stack everything */
+        @media (max-width: 768px) and (orientation: portrait) {
+            #videoContainer {
+                max-width: 95vw;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .controls > * {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            button {
+                width: 100%;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 5px;
+            }
+        }
+        
+        /* Tablet landscape */
+        @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+            #videoContainer {
+                max-width: 60vw;
+            }
+        }
+        
+        /* Large screens */
+        @media (min-width: 1400px) {
+            .container {
+                max-width: 1400px;
+            }
+            
+            #videoContainer {
+                max-width: 1280px;
+            }
+            
+            .slider-container {
+                max-width: 600px;
+            }
+            
+            .tracking-params {
+                max-width: 900px;
+            }
+        }
+        
+        /* Ultra-wide screens */
+        @media (min-width: 1920px) {
+            body {
+                font-size: 16px;
+            }
+            
+            .container {
+                max-width: 1800px;
+            }
+        }
+        
+        /* Small screens - compact mode */
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+            
+            h1 {
+                font-size: 18px;
+                margin-bottom: 8px;
+            }
+            
+            button {
+                padding: 8px 12px;
+                font-size: 11px;
+            }
+            
+            .slider-container,
+            .tracking-params {
+                width: 95%;
+                padding: 10px;
+            }
+        }
+        
+        /* Model Selection Panel */
+        .model-selection-panel {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: clamp(15px, 2vw, 20px);
+            margin-bottom: clamp(15px, 2vh, 20px);
+        }
+        
+        .model-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .model-panel-title {
+            font-size: clamp(16px, 2.5vw, 20px);
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .model-toggle-btn {
+            padding: 6px 12px;
+            font-size: clamp(11px, 1.8vw, 13px);
+            background: #444;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        .model-toggle-btn:hover {
+            background: #555;
+        }
+        
+        .model-panel-content {
+            display: block;
+        }
+        
+        .model-panel-content.collapsed {
+            display: none;
+        }
+        
+        .model-search-filters {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        
+        @media (min-width: 768px) {
+            .model-search-filters {
+                grid-template-columns: 2fr 1fr 1fr 1fr;
+            }
+        }
+        
+        .model-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .model-filter-label {
+            font-size: clamp(11px, 1.8vw, 12px);
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .model-search-input,
+        .model-filter-select {
+            padding: 8px 10px;
+            font-family: monospace;
+            font-size: clamp(12px, 2vw, 14px);
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #444;
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .model-search-input:focus,
+        .model-filter-select:focus {
+            border-color: #00ff00;
+        }
+        
+        .model-list {
+            display: grid;
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        
+        .model-card {
+            background: #1a1a1a;
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .model-card:hover {
+            border-color: #00ff00;
+            background: #222;
+        }
+        
+        .model-card.selected {
+            border-color: #00ff00;
+            background: #2a3a2a;
+        }
+        
+        .model-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .model-card-name {
+            font-size: clamp(13px, 2vw, 15px);
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .model-card-status {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #00ff00;
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .model-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: clamp(10px, 1.6vw, 11px);
+        }
+        
+        .model-meta-tag {
+            padding: 2px 6px;
+            background: #333;
+            border-radius: 3px;
+            color: #aaa;
+        }
+        
+        .model-card-description {
+            font-size: clamp(10px, 1.6vw, 11px);
+            color: #888;
+            line-height: 1.4;
+        }
+        
+        .model-list-empty {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: clamp(12px, 2vw, 14px);
+        }
+        
+        .model-stats-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid #444;
+            margin-top: 10px;
+            font-size: clamp(10px, 1.6vw, 11px);
+            color: #888;
+        }
+        
+        .filter-reset-btn {
+            padding: 4px 10px;
+            font-size: clamp(10px, 1.6vw, 11px);
+            background: transparent;
+            color: #00ff00;
+            border: 1px solid #444;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        .filter-reset-btn:hover {
+            border-color: #00ff00;
+            background: #2a2a2a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1></h1>
+        
+        <!-- Model Selection Panel -->
+        <div class="model-selection-panel">
+            <div class="model-panel-header">
+                <div class="model-panel-title">Model Selection</div>
+                <button class="model-toggle-btn" id="modelPanelToggle">Collapse</button>
+            </div>
+            <div class="model-panel-content" id="modelPanelContent">
+                <!-- Search and Filters -->
+                <div class="model-search-filters">
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Search</label>
+                        <input type="text" class="model-search-input" id="modelSearchInput" placeholder="Search models...">
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Type</label>
+                        <select class="model-filter-select" id="modelTypeFilter">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Architecture</label>
+                        <select class="model-filter-select" id="modelArchFilter">
+                            <option value="">All Architectures</option>
+                        </select>
+                    </div>
+                    <div class="model-filter-group">
+                        <label class="model-filter-label">Resolution</label>
+                        <select class="model-filter-select" id="modelResolutionFilter">
+                            <option value="">All Resolutions</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Model List -->
+                <div class="model-list" id="modelList">
+                    <div class="model-list-empty">Loading models...</div>
+                </div>
+                
+                <!-- Stats Summary -->
+                <div class="model-stats-summary">
+                    <span id="modelStatsText">0 models available</span>
+                    <button class="filter-reset-btn" id="filterResetBtn">Reset Filters</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="videoContainer">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas"></canvas>
+            <canvas id="hiddenCanvas"></canvas>
+        </div>
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+        <div class="controls">
+            <button id="runOnce" disabled>Run Once</button>
+            <button id="autoMode" disabled>Start Auto</button>
+            <button id="capture" disabled>Capture (0)</button>
+            <button id="addToDataset" disabled>Add to Dataset</button>
+            <button id="toggleDatasetViewer">Show Dataset Manager</button>
+        </div>
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+        <div class="controls" style="margin-top: 10px;">
+            <label style="cursor: pointer; margin-right: 20px;">
+                <input type="checkbox" id="includeOverlay" checked>
+                Include visualization with bounding boxes
+            </label>
+            <label style="cursor: pointer; margin-right: 20px;">
+                <input type="checkbox" id="enableTracking">
+                Enable Object Tracking
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 8px;">
+                <span>Algorithm:</span>
+                <select id="trackerType" style="padding: 8px; font-family: monospace; background: #2a2a2a; color: #00ff00; border: 2px solid #00ff00; border-radius: 4px; cursor: pointer;">
+                    <option value="bytetrack">ByteTrack</option>
+                    <option value="sort">SORT</option>
+                    <option value="deepsort">DeepSORT</option>
+                    <option value="iou">IoU Tracker</option>
+                    <option value="centroid">Centroid Tracker</option>
+                </select>
+            </label>
+        </div>
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
-  </body>
+        <div class="slider-container">
+            <div class="slider-title">Confidence Filter</div>
+            <div class="slider-controls">
+                <span>0%</span>
+                <input type="range" id="threshold" min="0" max="1" step="0.05" value="0.7">
+                <span>100%</span>
+            </div>
+            <div class="slider-value" id="thresholdValue">70%</div>
+            <div class="detection-count" id="detectionCount">0 / 0 cards shown</div>
+        </div>
+
+        <!-- ByteTrack Parameters -->
+        <div class="tracking-params" id="bytetrackParams" data-tracker="bytetrack">
+            <h3>ByteTrack Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>High Confidence Threshold</span>
+                    <span class="param-value" id="bt_trackHighThreshValue">60%</span>
+                </div>
+                <div class="param-description">
+                    Detections above this confidence are prioritized for first-stage matching. Higher values = more selective.
+                </div>
+                <input type="range" class="param-slider" id="bt_trackHighThresh" min="0.3" max="0.95" step="0.05" value="0.6">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Low Confidence Threshold</span>
+                    <span class="param-value" id="bt_trackLowThreshValue">30%</span>
+                </div>
+                <div class="param-description">
+                    Minimum confidence for second-stage matching. Helps recover temporarily low-confidence detections of existing tracks.
+                </div>
+                <input type="range" class="param-slider" id="bt_trackLowThresh" min="0.1" max="0.6" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>New Track Threshold</span>
+                    <span class="param-value" id="bt_newTrackThreshValue">70%</span>
+                </div>
+                <div class="param-description">
+                    Minimum confidence required to start tracking a new object. Higher values prevent false positives from creating tracks.
+                </div>
+                <input type="range" class="param-slider" id="bt_newTrackThresh" min="0.4" max="0.95" step="0.05" value="0.7">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Match Threshold (IoU)</span>
+                    <span class="param-value" id="bt_matchThreshValue">0.80</span>
+                </div>
+                <div class="param-description">
+                    Minimum Intersection-over-Union to match a detection to an existing track. Higher values = stricter matching (0.0-1.0).
+                </div>
+                <input type="range" class="param-slider" id="bt_matchThresh" min="0.3" max="0.95" step="0.05" value="0.8">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="bt_maxAgeValue">30</span>
+                </div>
+                <div class="param-description">
+                    Number of frames a track can persist without a matched detection before being deleted. Higher = more tolerant of occlusion.
+                </div>
+                <input type="range" class="param-slider" id="bt_maxAge" min="5" max="60" step="5" value="30">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="bt_minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Number of consecutive detections required before a track is confirmed and displayed. Higher = fewer false positives.
+                </div>
+                <input type="range" class="param-slider" id="bt_minHits" min="1" max="10" step="1" value="3">
+            </div>
+        </div>
+
+        <!-- SORT Parameters -->
+        <div class="tracking-params" id="sortParams" data-tracker="sort">
+            <h3>SORT Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="sort_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum Intersection-over-Union for matching detections to tracks. Higher values = stricter matching.
+                </div>
+                <input type="range" class="param-slider" id="sort_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="sort_maxAgeValue">1</span>
+                </div>
+                <div class="param-description">
+                    Number of frames a track can exist without a match. SORT uses short max age for fast recovery.
+                </div>
+                <input type="range" class="param-slider" id="sort_maxAge" min="1" max="10" step="1" value="1">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="sort_minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Number of consecutive detections required before displaying a track. Reduces false positives.
+                </div>
+                <input type="range" class="param-slider" id="sort_minHits" min="1" max="10" step="1" value="3">
+            </div>
+        </div>
+
+        <!-- DeepSORT Parameters -->
+        <div class="tracking-params" id="deepsortParams" data-tracker="deepsort">
+            <h3>DeepSORT Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="ds_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum IoU for spatial matching after appearance matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Cosine Distance</span>
+                    <span class="param-value" id="ds_maxCosineDistanceValue">0.20</span>
+                </div>
+                <div class="param-description">
+                    Maximum appearance feature distance for matching. Lower = more strict appearance matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_maxCosineDistance" min="0.05" max="0.5" step="0.05" value="0.2">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="ds_maxAgeValue">30</span>
+                </div>
+                <div class="param-description">
+                    Frames a track persists without detection. DeepSORT uses long max age for occlusion handling.
+                </div>
+                <input type="range" class="param-slider" id="ds_maxAge" min="5" max="100" step="5" value="30">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="ds_minHitsValue">3</span>
+                </div>
+                <div class="param-description">
+                    Consecutive detections needed before confirming a track.
+                </div>
+                <input type="range" class="param-slider" id="ds_minHits" min="1" max="10" step="1" value="3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>NN Budget</span>
+                    <span class="param-value" id="ds_nnBudgetValue">100</span>
+                </div>
+                <div class="param-description">
+                    Maximum number of appearance features to store per track. Higher = more memory but better matching.
+                </div>
+                <input type="range" class="param-slider" id="ds_nnBudget" min="10" max="200" step="10" value="100">
+            </div>
+        </div>
+
+        <!-- IoU Tracker Parameters -->
+        <div class="tracking-params" id="iouParams" data-tracker="iou">
+            <h3>IoU Tracker Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>IoU Threshold</span>
+                    <span class="param-value" id="iou_iouThresholdValue">0.30</span>
+                </div>
+                <div class="param-description">
+                    Minimum overlap for matching. Simple frame-to-frame matching without motion prediction.
+                </div>
+                <input type="range" class="param-slider" id="iou_iouThreshold" min="0.1" max="0.8" step="0.05" value="0.3">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Age (frames)</span>
+                    <span class="param-value" id="iou_maxAgeValue">5</span>
+                </div>
+                <div class="param-description">
+                    Frames without detection before track deletion. Use low values for simple tracking.
+                </div>
+                <input type="range" class="param-slider" id="iou_maxAge" min="1" max="20" step="1" value="5">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Minimum Hits</span>
+                    <span class="param-value" id="iou_minHitsValue">1</span>
+                </div>
+                <div class="param-description">
+                    Detections needed to confirm track. IoU tracker often uses 1 for immediate response.
+                </div>
+                <input type="range" class="param-slider" id="iou_minHits" min="1" max="10" step="1" value="1">
+            </div>
+        </div>
+
+        <!-- Centroid Tracker Parameters -->
+        <div class="tracking-params" id="centroidParams" data-tracker="centroid">
+            <h3>Centroid Tracker Parameters</h3>
+            
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Distance</span>
+                    <span class="param-value" id="ct_maxDistanceValue">0.10</span>
+                </div>
+                <div class="param-description">
+                    Maximum normalized Euclidean distance between centroids for matching (0.0-1.0).
+                </div>
+                <input type="range" class="param-slider" id="ct_maxDistance" min="0.01" max="0.5" step="0.01" value="0.1">
+            </div>
+
+            <div class="param-group">
+                <div class="param-label">
+                    <span>Max Disappeared (frames)</span>
+                    <span class="param-value" id="ct_maxDisappearedValue">5</span>
+                </div>
+                <div class="param-description">
+                    Number of frames an object can be missing before being deregistered.
+                </div>
+                <input type="range" class="param-slider" id="ct_maxDisappeared" min="1" max="30" step="1" value="5">
+            </div>
+        </div>
+
+        <div id="status">
+            <div id="statusText">Initializing...</div>
+            <div class="stats">
+                <div>Inference: <span id="inferenceTime">--</span></div>
+                <div>Provider: <span id="provider">--</span></div>
+                <div>Detections: <span id="detectionTotal">0</span></div>
+            </div>
+            <div id="modelInfo" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444; font-size: 11px; color: #888; display: none;">
+                <div><span style="color: #00ff00;">Model:</span> <span id="modelInfoText">--</span></div>
+            </div>
+        </div>
+        
+        <!-- Dataset Viewer Container (hidden by default) -->
+        <div id="datasetViewerContainer" style="display: none; margin-top: 30px;"></div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // LOGGING SYSTEM
+        // ============================================================================
+        const LogLevel = {
+            DEBUG: 0,
+            INFO: 1,
+            WARNING: 2,
+            ERROR: 3
+        };
+
+        class Logger {
+            constructor(moduleName, minLevel = LogLevel.DEBUG) {
+                this.moduleName = moduleName;
+                this.minLevel = minLevel;
+            }
+
+            _log(level, functionName, message, data = null) {
+                if (level < this.minLevel) return;
+
+                const prefix = `[${this.moduleName}.${functionName}]`;
+                const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+                const fullMessage = `${timestamp} ${prefix} ${message}`;
+
+                switch (level) {
+                    case LogLevel.DEBUG:
+                        console.log(`%c${fullMessage}`, 'color: #888', data || '');
+                        break;
+                    case LogLevel.INFO:
+                        console.log(`%c${fullMessage}`, 'color: #00aaff', data || '');
+                        break;
+                    case LogLevel.WARNING:
+                        console.warn(`${fullMessage}`, data || '');
+                        break;
+                    case LogLevel.ERROR:
+                        console.error(`${fullMessage}`, data || '');
+                        break;
+                }
+            }
+
+            debug(functionName, message, data = null) {
+                this._log(LogLevel.DEBUG, functionName, message, data);
+            }
+
+            info(functionName, message, data = null) {
+                this._log(LogLevel.INFO, functionName, message, data);
+            }
+
+            warning(functionName, message, data = null) {
+                this._log(LogLevel.WARNING, functionName, message, data);
+            }
+
+            error(functionName, message, data = null) {
+                this._log(LogLevel.ERROR, functionName, message, data);
+            }
+        }
+
+        // Create loggers for different modules
+        const cameraLogger = new Logger('Camera');
+        const modelLogger = new Logger('Model');
+        const inferenceLogger = new Logger('Inference');
+        const renderLogger = new Logger('Render');
+        const uiLogger = new Logger('UI');
+        const mainLogger = new Logger('Main');
+
+        // ============================================================================
+        // APPLICATION STATE
+        // ============================================================================
+        let session = null;
+        let autoMode = false;
+        let isProcessing = false;
+        let detections = [];
+        let confidenceThreshold = 0.7;
+        let animationFrameId = null;
+        let trackingEnabled = false;
+        let tracker = null;
+        let trackerType = 'bytetrack';
+        
+        // Model management
+        let availableModels = [];
+        let currentModel = null;
+        let filteredModels = [];
+        let modelFilters = {
+            search: '',
+            type: '',
+            architecture: '',
+            resolution: ''
+        };
+        
+        // Preprocessing transformation parameters (for coordinate conversion)
+        let preprocessParams = {
+            scale: 1.0,
+            padX: 0,
+            padY: 0,
+            targetSize: 1088,
+            originalWidth: 0,
+            originalHeight: 0
+        };
+        
+        // Tracking parameters for each algorithm
+        let trackingParams = {
+            bytetrack: {
+                trackHighThresh: 0.6,
+                trackLowThresh: 0.3,
+                newTrackThresh: 0.7,
+                matchThresh: 0.8,
+                maxAge: 30,
+                minHits: 3
+            },
+            sort: {
+                iouThreshold: 0.3,
+                maxAge: 1,
+                minHits: 3
+            },
+            deepsort: {
+                iouThreshold: 0.3,
+                maxCosineDistance: 0.2,
+                maxAge: 30,
+                minHits: 3,
+                nnBudget: 100
+            },
+            iou: {
+                iouThreshold: 0.3,
+                maxAge: 5,
+                minHits: 1
+            },
+            centroid: {
+                maxDistance: 0.1,
+                maxDisappeared: 5
+            }
+        };
+
+        const video = document.getElementById('video');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const hiddenCanvas = document.getElementById('hiddenCanvas');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+
+        const statusText = document.getElementById('statusText');
+        const inferenceTimeEl = document.getElementById('inferenceTime');
+        const providerEl = document.getElementById('provider');
+        const detectionTotalEl = document.getElementById('detectionTotal');
+        const thresholdValueEl = document.getElementById('thresholdValue');
+        const detectionCountEl = document.getElementById('detectionCount');
+        const modelInfoEl = document.getElementById('modelInfo');
+        const modelInfoTextEl = document.getElementById('modelInfoText');
+
+        const runOnceBtn = document.getElementById('runOnce');
+        const autoModeBtn = document.getElementById('autoMode');
+        const captureBtn = document.getElementById('capture');
+        const addToDatasetBtn = document.getElementById('addToDataset');
+        const toggleDatasetViewerBtn = document.getElementById('toggleDatasetViewer');
+        const includeOverlayCheckbox = document.getElementById('includeOverlay');
+        const enableTrackingCheckbox = document.getElementById('enableTracking');
+        const thresholdInput = document.getElementById('threshold');
+        const trackerTypeSelect = document.getElementById('trackerType');
+        
+        // Model selection panel elements
+        const modelPanelToggle = document.getElementById('modelPanelToggle');
+        const modelPanelContent = document.getElementById('modelPanelContent');
+        const modelSearchInput = document.getElementById('modelSearchInput');
+        const modelTypeFilter = document.getElementById('modelTypeFilter');
+        const modelArchFilter = document.getElementById('modelArchFilter');
+        const modelResolutionFilter = document.getElementById('modelResolutionFilter');
+        const modelList = document.getElementById('modelList');
+        const modelStatsText = document.getElementById('modelStatsText');
+        const filterResetBtn = document.getElementById('filterResetBtn');
+
+        // ============================================================================
+        // DATASET MANAGEMENT
+        // ============================================================================
+        let datasetManager = new DatasetManager();
+        let datasetViewer = null;
+        let isDatasetViewerVisible = false;
+
+        function toggleDatasetViewer() {
+            const container = document.getElementById('datasetViewerContainer');
+            isDatasetViewerVisible = !isDatasetViewerVisible;
+            
+            if (isDatasetViewerVisible) {
+                container.style.display = 'block';
+                if (!datasetViewer) {
+                    datasetViewer = new DatasetViewer('datasetViewerContainer', datasetManager);
+                } else {
+                    datasetViewer.refresh();
+                }
+                toggleDatasetViewerBtn.textContent = 'Hide Dataset Manager';
+                // Scroll to dataset viewer
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                container.style.display = 'none';
+                toggleDatasetViewerBtn.textContent = 'Show Dataset Manager';
+            }
+        }
+
+        async function addToDataset() {
+            if (detections.length === 0) {
+                uiLogger.warning('addToDataset', 'No detections to add');
+                alert('No detections available. Run inference first.');
+                return;
+            }
+            
+            // Filter detections by confidence threshold
+            const filteredDetections = detections.filter(d => d.confidence >= confidenceThreshold);
+            
+            if (filteredDetections.length === 0) {
+                uiLogger.warning('addToDataset', 'No detections pass confidence threshold');
+                alert(`No detections pass the ${(confidenceThreshold * 100).toFixed(0)}% confidence threshold. Lower the threshold or run inference again.`);
+                return;
+            }
+            
+            try {
+                uiLogger.info('addToDataset', `Adding ${filteredDetections.length} detections to dataset (threshold: ${confidenceThreshold})`);
+                
+                // Create training example from current frame
+                const example = await DatasetManager.createFromVideoFrame(
+                    video,
+                    filteredDetections,
+                    confidenceThreshold
+                );
+                
+                // Add to dataset (now async)
+                await datasetManager.addExample(example);
+                
+                // Update UI
+                statusText.textContent = `Added to dataset: ${filteredDetections.length} detections (Total: ${datasetManager.getStats().totalExamples} examples)`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 3000);
+                
+                // Refresh dataset viewer if visible
+                if (isDatasetViewerVisible && datasetViewer) {
+                    datasetViewer.refresh();
+                }
+                
+                uiLogger.info('addToDataset', `Successfully added example. Total examples: ${datasetManager.getStats().totalExamples}`);
+                
+            } catch (error) {
+                uiLogger.error('addToDataset', `Failed to add to dataset: ${error.message}`, error);
+                alert(`Error adding to dataset: ${error.message}`);
+            }
+        }
+
+        // ============================================================================
+        // TRACKING UTILITIES
+        // ============================================================================
+        function initializeTracker() {
+            if (!window.TrackerFactory) {
+                uiLogger.error('initializeTracker', 'TrackerFactory not available');
+                return;
+            }
+            
+            const params = trackingParams[trackerType];
+            tracker = TrackerFactory.create(trackerType, params);
+            uiLogger.info('initializeTracker', `${trackerType} tracker initialized with parameters`, params);
+        }
+        
+        function showTrackerParams(type) {
+            // Hide all parameter panels
+            document.querySelectorAll('.tracking-params').forEach(panel => {
+                panel.classList.remove('visible');
+            });
+            
+            // Show the selected tracker's panel
+            const panel = document.querySelector(`.tracking-params[data-tracker="${type}"]`);
+            if (panel && trackingEnabled) {
+                panel.classList.add('visible');
+            }
+        }
+
+        // ============================================================================
+        // CAMERA INITIALIZATION
+        // ============================================================================
+        async function initCamera() {
+            cameraLogger.info('initCamera', 'Starting camera initialization');
+            try {
+                statusText.textContent = 'Requesting camera access...';
+                cameraLogger.debug('initCamera', 'Requesting camera permissions with constraints', {
+                    facingMode: 'environment',
+                    width: 1920,
+                    height: 1080
+                });
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                cameraLogger.info('initCamera', 'Camera access granted');
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    const videoInfo = {
+                        clientWidth: video.clientWidth,
+                        clientHeight: video.clientHeight,
+                        videoWidth: video.videoWidth,
+                        videoHeight: video.videoHeight
+                    };
+                    cameraLogger.info('initCamera', 'Video metadata loaded', videoInfo);
+                    
+                    // Initial canvas sizing
+                    updateCanvasSize();
+                    statusText.textContent = 'Camera ready';
+                    
+                    cameraLogger.info('initCamera', 'Camera initialization complete');
+                };
+            } catch (error) {
+                cameraLogger.error('initCamera', `Failed to initialize camera: ${error.message}`, error);
+                statusText.textContent = `Camera error: ${error.message}`;
+            }
+        }
+
+        // ============================================================================
+        // CANVAS SIZING
+        // ============================================================================
+        let lastVideoWidth = 0;
+        let lastVideoHeight = 0;
+        
+        function updateCanvasSize() {
+            // Get the actual rendered size of the video element
+            const rect = video.getBoundingClientRect();
+            
+            // Only update if size has changed to avoid unnecessary operations
+            if (Math.abs(rect.width - lastVideoWidth) < 1 && Math.abs(rect.height - lastVideoHeight) < 1) {
+                return;
+            }
+            
+            lastVideoWidth = rect.width;
+            lastVideoHeight = rect.height;
+            
+            // Set canvas to match the exact rendered video size
+            overlayCanvas.width = rect.width;
+            overlayCanvas.height = rect.height;
+            
+            // Position canvas to overlay the video
+            overlayCanvas.style.width = rect.width + 'px';
+            overlayCanvas.style.height = rect.height + 'px';
+            overlayCanvas.style.left = (rect.left - video.parentElement.getBoundingClientRect().left) + 'px';
+            overlayCanvas.style.top = (rect.top - video.parentElement.getBoundingClientRect().top) + 'px';
+            
+            renderLogger.info('updateCanvasSize', 'Canvas resized to match video', {
+                canvasWidth: overlayCanvas.width,
+                canvasHeight: overlayCanvas.height,
+                videoRenderedSize: `${rect.width}x${rect.height}`
+            });
+        }
+
+        // ============================================================================
+        // MODEL MANAGEMENT
+        // ============================================================================
+        async function loadModelRegistry() {
+            modelLogger.info('loadModelRegistry', 'Loading model registry');
+            
+            try {
+                const response = await fetch('/models/models.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch models.json: ${response.statusText}`);
+                }
+                
+                const registry = await response.json();
+                availableModels = registry.models;
+                filteredModels = [...availableModels];
+                
+                modelLogger.info('loadModelRegistry', `Loaded ${availableModels.length} models from registry`);
+                
+                // Populate filter dropdowns
+                populateFilters();
+                
+                // Render model list
+                renderModelList();
+                
+                // Select first model by default
+                if (availableModels.length > 0) {
+                    currentModel = availableModels[0];
+                    modelLogger.info('loadModelRegistry', `Default model selected: ${currentModel.name}`);
+                }
+                
+            } catch (error) {
+                modelLogger.error('loadModelRegistry', `Failed to load model registry: ${error.message}`, error);
+                modelList.innerHTML = '<div class="model-list-empty">Error loading models</div>';
+                statusText.textContent = `Error loading model registry: ${error.message}`;
+            }
+        }
+        
+        function populateFilters() {
+            // Extract unique values for each filter
+            const types = [...new Set(availableModels.map(m => m.type))].sort();
+            const architectures = [...new Set(availableModels.map(m => m.architecture))].sort();
+            const resolutions = [...new Set(availableModels.map(m => m.resolution))].sort((a, b) => a - b);
+            
+            // Populate type filter
+            modelTypeFilter.innerHTML = '<option value="">All Types</option>';
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.toUpperCase();
+                modelTypeFilter.appendChild(option);
+            });
+            
+            // Populate architecture filter
+            modelArchFilter.innerHTML = '<option value="">All Architectures</option>';
+            architectures.forEach(arch => {
+                const option = document.createElement('option');
+                option.value = arch;
+                option.textContent = arch;
+                modelArchFilter.appendChild(option);
+            });
+            
+            // Populate resolution filter
+            modelResolutionFilter.innerHTML = '<option value="">All Resolutions</option>';
+            resolutions.forEach(res => {
+                const option = document.createElement('option');
+                option.value = res;
+                option.textContent = `${res}px`;
+                modelResolutionFilter.appendChild(option);
+            });
+            
+            modelLogger.info('populateFilters', `Populated filters: ${types.length} types, ${architectures.length} architectures, ${resolutions.length} resolutions`);
+        }
+        
+        function applyFilters() {
+            filteredModels = availableModels.filter(model => {
+                // Search filter
+                if (modelFilters.search) {
+                    const searchLower = modelFilters.search.toLowerCase();
+                    const matchesSearch = 
+                        model.name.toLowerCase().includes(searchLower) ||
+                        model.description.toLowerCase().includes(searchLower) ||
+                        model.architecture.toLowerCase().includes(searchLower) ||
+                        model.classes.some(c => c.toLowerCase().includes(searchLower));
+                    
+                    if (!matchesSearch) return false;
+                }
+                
+                // Type filter
+                if (modelFilters.type && model.type !== modelFilters.type) {
+                    return false;
+                }
+                
+                // Architecture filter
+                if (modelFilters.architecture && model.architecture !== modelFilters.architecture) {
+                    return false;
+                }
+                
+                // Resolution filter
+                if (modelFilters.resolution && model.resolution !== parseInt(modelFilters.resolution)) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            renderModelList();
+            modelLogger.debug('applyFilters', `Filtered ${filteredModels.length}/${availableModels.length} models`, modelFilters);
+        }
+        
+        function renderModelList() {
+            if (filteredModels.length === 0) {
+                modelList.innerHTML = '<div class="model-list-empty">No models match your filters</div>';
+                modelStatsText.textContent = '0 models found';
+                return;
+            }
+            
+            modelList.innerHTML = '';
+            
+            filteredModels.forEach(model => {
+                const card = document.createElement('div');
+                card.className = 'model-card';
+                if (currentModel && currentModel.id === model.id) {
+                    card.classList.add('selected');
+                }
+                
+                const isActive = currentModel && currentModel.id === model.id;
+                
+                card.innerHTML = `
+                    <div class="model-card-header">
+                        <div class="model-card-name">${model.name}</div>
+                        ${isActive ? '<div class="model-card-status">ACTIVE</div>' : ''}
+                    </div>
+                    <div class="model-card-meta">
+                        <span class="model-meta-tag">${model.type.toUpperCase()}</span>
+                        <span class="model-meta-tag">${model.architecture}</span>
+                        <span class="model-meta-tag">${model.resolution}px</span>
+                        <span class="model-meta-tag">${model.classCount} class${model.classCount !== 1 ? 'es' : ''}</span>
+                    </div>
+                    <div class="model-card-description">${model.description}</div>
+                `;
+                
+                card.addEventListener('click', () => selectModel(model));
+                
+                modelList.appendChild(card);
+            });
+            
+            modelStatsText.textContent = `${filteredModels.length} model${filteredModels.length !== 1 ? 's' : ''} available`;
+        }
+        
+        async function selectModel(model) {
+            if (currentModel && currentModel.id === model.id) {
+                modelLogger.info('selectModel', `Model ${model.name} already loaded`);
+                return;
+            }
+            
+            modelLogger.info('selectModel', `User selected model: ${model.name}`);
+            
+            // Clear current detections
+            detections = [];
+            drawDetections();
+            updateStats();
+            
+            // Load the new model
+            await loadModel(model);
+            
+            // Re-render to update active status
+            renderModelList();
+        }
+        
+        function resetFilters() {
+            modelFilters = {
+                search: '',
+                type: '',
+                architecture: '',
+                resolution: ''
+            };
+            
+            modelSearchInput.value = '';
+            modelTypeFilter.value = '';
+            modelArchFilter.value = '';
+            modelResolutionFilter.value = '';
+            
+            applyFilters();
+            modelLogger.info('resetFilters', 'Filters reset');
+        }
+        
+        async function loadModel(modelConfig) {
+            modelLogger.info('loadModel', `Starting model loading: ${modelConfig.name}`);
+            
+            if (!window.ort) {
+                modelLogger.error('loadModel', 'ONNX Runtime not available in window object');
+                statusText.textContent = 'Error: ONNX Runtime not loaded';
+                return;
+            }
+
+            modelLogger.debug('loadModel', `ONNX Runtime version: ${ort.env.versions.common}`);
+            modelLogger.debug('loadModel', 'Model configuration', modelConfig);
+
+            try {
+                // Stop auto mode if running
+                if (autoMode) {
+                    autoMode = false;
+                    autoModeBtn.textContent = 'Start Auto';
+                    autoModeBtn.classList.remove('stop');
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                }
+                
+                // Disable buttons during loading
+                runOnceBtn.disabled = true;
+                autoModeBtn.disabled = true;
+                modelPanelToggle.disabled = true;
+                modelList.style.pointerEvents = 'none';
+                
+                statusText.textContent = `Loading ${modelConfig.name}...`;
+                modelLogger.info('loadModel', 'Creating inference session with WebGPU (no fallback)');
+
+                const startTime = performance.now();
+                session = await ort.InferenceSession.create(modelConfig.path, {
+                    executionProviders: ['webgpu'],
+                    graphOptimizationLevel: 'all'
+                });
+
+                const loadTime = performance.now() - startTime;
+                modelLogger.info('loadModel', `Model loaded successfully in ${loadTime.toFixed(2)}ms`);
+                
+                // Update current model
+                currentModel = modelConfig;
+                
+                // Update preprocessing params with model resolution
+                preprocessParams.targetSize = modelConfig.resolution;
+                
+                // Log model details
+                const modelInfo = {
+                    inputNames: session.inputNames,
+                    outputNames: session.outputNames,
+                    modelType: modelConfig.type,
+                    resolution: modelConfig.resolution,
+                    architecture: modelConfig.architecture,
+                    classes: modelConfig.classes
+                };
+                modelLogger.info('loadModel', 'Model metadata', modelInfo);
+                
+                statusText.textContent = `${modelConfig.name} ready - Click Start Auto or Run Once`;
+                providerEl.textContent = 'WebGPU';
+                
+                // Update model info display
+                modelInfoEl.style.display = 'block';
+                modelInfoTextEl.textContent = `${modelConfig.architecture} | ${modelConfig.resolution}px | ${modelConfig.type.toUpperCase()} | ${modelConfig.classes.join(', ')}`;
+                
+                runOnceBtn.disabled = false;
+                autoModeBtn.disabled = false;
+                modelPanelToggle.disabled = false;
+                modelList.style.pointerEvents = '';
+                
+                modelLogger.info('loadModel', 'Model initialization complete');
+            } catch (error) {
+                modelLogger.error('loadModel', `Failed to load model: ${error.message}`, {
+                    error: error,
+                    stack: error.stack
+                });
+                statusText.textContent = `Model load error: ${error.message}`;
+                modelPanelToggle.disabled = false;
+                modelList.style.pointerEvents = '';
+            }
+        }
+
+        // ============================================================================
+        // IMAGE PREPROCESSING
+        // ============================================================================
+        function preprocessImage(imageData) {
+            // inferenceLogger.debug('preprocessImage', `Starting preprocessing of ${imageData.width}x${imageData.height} image`);
+            
+            const { width, height } = imageData;
+            const targetSize = currentModel ? currentModel.resolution : 1088;
+
+            const scale = Math.min(targetSize / width, targetSize / height);
+            const newW = Math.round(width * scale);
+            const newH = Math.round(height * scale);
+            const padX = Math.floor((targetSize - newW) / 2);
+            const padY = Math.floor((targetSize - newH) / 2);
+
+            // Store transformation parameters for coordinate conversion
+            preprocessParams = {
+                scale: scale,
+                padX: padX,
+                padY: padY,
+                targetSize: targetSize,
+                originalWidth: width,
+                originalHeight: height
+            };
+
+            inferenceLogger.info('preprocessImage', 'Preprocessing transformation', preprocessParams);
+
+            // Create source canvas from ImageData
+            const srcCanvas = document.createElement('canvas');
+            const srcCtx = srcCanvas.getContext('2d');
+            srcCanvas.width = width;
+            srcCanvas.height = height;
+            srcCtx.putImageData(imageData, 0, 0);
+
+            // Create target canvas with padding
+            const dstCanvas = document.createElement('canvas');
+            const dstCtx = dstCanvas.getContext('2d');
+            dstCanvas.width = targetSize;
+            dstCanvas.height = targetSize;
+
+            // Fill with gray padding
+            dstCtx.fillStyle = '#808080';
+            dstCtx.fillRect(0, 0, targetSize, targetSize);
+            dstCtx.drawImage(srcCanvas, 0, 0, width, height, padX, padY, newW, newH);
+
+            // Convert to tensor
+            const resized = dstCtx.getImageData(0, 0, targetSize, targetSize);
+            const pixels = resized.data;
+            const tensorData = new Float32Array(1 * 3 * targetSize * targetSize);
+            const pixelCount = targetSize * targetSize;
+
+            // inferenceLogger.debug('preprocessImage', 'Converting to tensor (CHW format)');
+            for (let i = 0; i < pixelCount; i++) {
+                const p = i * 4;
+                tensorData[i] = pixels[p] / 255.0;
+                tensorData[i + pixelCount] = pixels[p + 1] / 255.0;
+                tensorData[i + 2 * pixelCount] = pixels[p + 2] / 255.0;
+            }
+
+            const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetSize, targetSize]);
+            // inferenceLogger.debug('preprocessImage', `Tensor created: ${tensor.dims.join('x')}, type: ${tensor.type}`);
+            
+            return tensor;
+        }
+
+        // ============================================================================
+        // INFERENCE
+        // ============================================================================
+        async function runInference() {
+            if (!session) {
+                inferenceLogger.warning('runInference', 'No session available, skipping inference');
+                return;
+            }
+            
+            if (isProcessing) {
+                inferenceLogger.debug('runInference', 'Already processing, skipping this frame');
+                return;
+            }
+            
+            //inferenceLogger.info('runInference', 'Starting inference');
+
+            try {
+                isProcessing = true;
+
+                // Capture video frame
+                hiddenCanvas.width = video.videoWidth;
+                hiddenCanvas.height = video.videoHeight;
+                hiddenCtx.drawImage(video, 0, 0);
+                //inferenceLogger.debug('runInference', `Captured frame: ${video.videoWidth}x${video.videoHeight}`);
+
+                const imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                const inputTensor = preprocessImage(imageData);
+
+                // Run model inference
+                // inferenceLogger.debug('runInference', 'Running model with input', {
+                //     inputName: session.inputNames[0],
+                //     inputShape: inputTensor.dims.join('x')
+                // });
+                
+                const inferenceStart = performance.now();
+                const results = await session.run({
+                    [session.inputNames[0]]: inputTensor
+                });
+                const inferenceMs = performance.now() - inferenceStart;
+
+                // inferenceLogger.info('runInference', `Inference completed in ${inferenceMs.toFixed(1)}ms`);
+                inferenceTimeEl.textContent = `${inferenceMs.toFixed(0)}ms`;
+                providerEl.textContent = 'WebGPU';
+
+                // Validate outputs
+                // inferenceLogger.debug('runInference', 'Model outputs', {
+                //     expectedOutputs: session.outputNames,
+                //     actualOutputs: Object.keys(results),
+                //     outputCount: session.outputNames.length
+                // });
+
+                // Log detailed output information
+                // session.outputNames.forEach((name, idx) => {
+                //     if (results[name]) {
+                //         inferenceLogger.debug('runInference', `Output ${idx}: ${name}`, {
+                //             shape: results[name].dims.join('x'),
+                //             type: results[name].type,
+                //             dataLength: results[name].data.length,
+                //             firstFewValues: Array.from(results[name].data.slice(0, 10))
+                //         });
+                //     }
+                // });
+
+                // Parse output based on structure
+                const output = results[session.outputNames[0]];
+                const outputData = output.data;
+                const outputShape = output.dims;
+                
+                //inferenceLogger.debug('runInference', 'Parsing output', {
+                //   shape: outputShape.join('x'),
+                //    format: 'OBB (Oriented Bounding Boxes)',
+                //    valuesPerDetection: outputShape[2]
+                //});
+
+                // Parse output format based on model type
+                const numDetections = outputShape[1];
+                const valuesPerDetection = outputShape[2];
+                
+                // Validate against model metadata
+                const expectedValues = currentModel ? currentModel.valuesPerDetection : 7;
+                if (valuesPerDetection !== expectedValues) {
+                    inferenceLogger.warning('runInference', `Expected ${expectedValues} values per detection (${currentModel.outputFormat}), got ${valuesPerDetection}`);
+                }
+
+                // Process detections
+                detections = [];
+                const minConfidence = 0.3;
+                
+                for (let i = 0; i < numDetections; i++) {
+                    const offset = i * valuesPerDetection;
+                    const val0 = outputData[offset];
+                    const val1 = outputData[offset + 1];
+                    const val2 = outputData[offset + 2];
+                    const val3 = outputData[offset + 3];
+                    const confidence = outputData[offset + 4];
+                    const classId = outputData[offset + 5];
+                    
+                    // Angle only exists for OBB models (7 values per detection)
+                    const angle = (valuesPerDetection >= 7) ? outputData[offset + 6] : 0;
+                    const isOBB = currentModel && currentModel.type === 'obb';
+                    
+                    if (confidence >= minConfidence) {
+                        // Parse coordinates based on model type
+                        // OBB models output: [cx, cy, w, h, conf, class, angle]
+                        // Detection models with NMS output: [x1, y1, x2, y2, conf, class]
+                        let cx_model, cy_model, w_model, h_model;
+                        
+                        if (isOBB) {
+                            // OBB format: center coordinates + dimensions
+                            cx_model = val0;
+                            cy_model = val1;
+                            w_model = val2;
+                            h_model = val3;
+                        } else {
+                            // Detection format: corner coordinates (x1, y1, x2, y2)
+                            const x1 = val0;
+                            const y1 = val1;
+                            const x2 = val2;
+                            const y2 = val3;
+                            cx_model = (x1 + x2) / 2;
+                            cy_model = (y1 + y2) / 2;
+                            w_model = x2 - x1;
+                            h_model = y2 - y1;
+                        }
+                        
+                        // Debug logging for first detection
+                        if (i === 0) {
+                            console.log(`=== MODEL OUTPUT (${preprocessParams.targetSize}x${preprocessParams.targetSize} space) ===`);
+                            console.log('Raw values:', {
+                                format: isOBB ? 'cx,cy,w,h' : 'x1,y1,x2,y2',
+                                val0: val0.toFixed(2),
+                                val1: val1.toFixed(2),
+                                val2: val2.toFixed(2),
+                                val3: val3.toFixed(2),
+                                parsed: {
+                                    cx: cx_model.toFixed(2),
+                                    cy: cy_model.toFixed(2),
+                                    w: w_model.toFixed(2),
+                                    h: h_model.toFixed(2)
+                                }
+                            });
+                        }
+                        
+                        // Transform coordinates from model's padded space back to original video space
+                        // Step 1: Remove padding from center coordinates
+                        const cx_scaled = cx_model - preprocessParams.padX;
+                        const cy_scaled = cy_model - preprocessParams.padY;
+                        const w_scaled = w_model;
+                        const h_scaled = h_model;
+                        
+                        if (i === 0) {
+                            console.log('After removing padding:', {
+                                cx_scaled: cx_scaled.toFixed(2),
+                                cy_scaled: cy_scaled.toFixed(2),
+                                w_scaled: w_scaled.toFixed(2),
+                                h_scaled: h_scaled.toFixed(2)
+                            });
+                        }
+                        
+                        // Step 2: Scale back to original dimensions
+                        const cx_original = cx_scaled / preprocessParams.scale;
+                        const cy_original = cy_scaled / preprocessParams.scale;
+                        const w_original = w_scaled / preprocessParams.scale;
+                        const h_original = h_scaled / preprocessParams.scale;
+                        
+                        if (i === 0) {
+                            console.log('After scaling to original pixels:', {
+                                cx_original: cx_original.toFixed(2),
+                                cy_original: cy_original.toFixed(2),
+                                w_original: w_original.toFixed(2),
+                                h_original: h_original.toFixed(2),
+                                aspectRatio_pixels: (w_original / h_original).toFixed(3)
+                            });
+                        }
+                        
+                        // Step 3: Normalize to 0-1 range based on original video dimensions
+                        const normalizedX = cx_original / preprocessParams.originalWidth;
+                        const normalizedY = cy_original / preprocessParams.originalHeight;
+                        const normalizedW = w_original / preprocessParams.originalWidth;
+                        const normalizedH = h_original / preprocessParams.originalHeight;
+                        
+                        if (i === 0) {
+                            console.log('After normalizing (0-1 range):', {
+                                normalizedX: normalizedX.toFixed(4),
+                                normalizedY: normalizedY.toFixed(4),
+                                normalizedW: normalizedW.toFixed(4),
+                                normalizedH: normalizedH.toFixed(4),
+                                'aspectRatio (normalized)': (normalizedW / normalizedH).toFixed(3),
+                                'aspectRatio (pixels)': (w_original / h_original).toFixed(3)
+                            });
+                        }
+                        
+                        detections.push({
+                            x: normalizedX,
+                            y: normalizedY,
+                            width: normalizedW,
+                            height: normalizedH,
+                            confidence: confidence,
+                            classId: classId,
+                            angle: angle,
+                            isOBB: isOBB
+                        });
+                    }
+                }
+
+                //inferenceLogger.info('runInference', `Found ${detections.length} detections (threshold: 0.3)`);
+                
+                if (detections.length > 0) {
+                    const confidences = detections.map(d => d.confidence.toFixed(3));
+                    //inferenceLogger.debug('runInference', 'Detection confidences', { confidences });
+                }
+
+                // Apply object tracking if enabled
+                if (trackingEnabled && tracker) {
+                    //inferenceLogger.info('runInference', 'Applying ByteTrack object tracking');
+                    const trackedDetections = tracker.update(detections);
+                    //inferenceLogger.info('runInference', `Tracking: ${detections.length} raw -> ${trackedDetections.length} tracked`);
+                    detections = trackedDetections;
+                }
+
+                drawDetections();
+                updateStats();
+
+            } catch (error) {
+                inferenceLogger.error('runInference', `Inference failed: ${error.message}`, {
+                    error: error,
+                    stack: error.stack
+                });
+                statusText.textContent = `Error: ${error.message}`;
+            } finally {
+                isProcessing = false;
+                //inferenceLogger.debug('runInference', 'Inference complete, released processing lock');
+            }
+        }
+
+        // ============================================================================
+        // RENDERING
+        // ============================================================================
+        function drawDetections() {
+            // renderLogger.debug('drawDetections', `Drawing ${detections.length} detections`);
+            
+            // Update canvas size to match current video rendering
+            updateCanvasSize();
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
+            // renderLogger.debug('drawDetections', `${filtered.length} detections pass threshold ${confidenceThreshold}`);
+
+            filtered.forEach((det, idx) => {
+                // Convert normalized coordinates to canvas pixels
+                const centerX = det.x * overlayCanvas.width;
+                const centerY = det.y * overlayCanvas.height;
+                const w = det.width * overlayCanvas.width;
+                const h = det.height * overlayCanvas.height;
+                const angle = det.angle || 0;
+
+                // Get class name from model configuration
+                let className = '';
+                if (currentModel && currentModel.classes && det.classId !== undefined) {
+                    const classIndex = Math.floor(det.classId);
+                    if (classIndex >= 0 && classIndex < currentModel.classes.length) {
+                        className = currentModel.classes[classIndex];
+                    }
+                }
+                
+                // Build label: [class] [trackID] confidence%
+                let label;
+                if (trackingEnabled && det.trackId !== undefined) {
+                    label = className ? `${className} ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%` : `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
+                } else {
+                    label = className ? `${className} ${(det.confidence * 100).toFixed(0)}%` : `${(det.confidence * 100).toFixed(0)}%`;
+                }
+
+                overlayCtx.save();
+                
+                if (det.isOBB && angle !== 0) {
+                    // Draw OBB (Oriented Bounding Box) - rotated rectangle
+                    overlayCtx.translate(centerX, centerY);
+                    overlayCtx.rotate(angle);
+                    
+                    overlayCtx.strokeStyle = '#00ff00';
+                    overlayCtx.lineWidth = 3;
+                    overlayCtx.strokeRect(-w/2, -h/2, w, h);
+                    
+                    // Draw label (unrotated for readability)
+                    overlayCtx.rotate(-angle);
+                    overlayCtx.fillStyle = '#00ff00';
+                    overlayCtx.font = '16px monospace';
+                    overlayCtx.fillText(label, -w/2, -h/2 - 5);
+                } else {
+                    // Draw regular bounding box (axis-aligned rectangle)
+                    const x = centerX - w/2;
+                    const y = centerY - h/2;
+                    
+                    overlayCtx.strokeStyle = '#00ff00';
+                    overlayCtx.lineWidth = 3;
+                    overlayCtx.strokeRect(x, y, w, h);
+                    
+                    // Draw label
+                    overlayCtx.fillStyle = '#00ff00';
+                    overlayCtx.font = '16px monospace';
+                    overlayCtx.fillText(label, x, y - 5);
+                }
+                
+                overlayCtx.restore();
+            });
+            
+            // if (filtered.length > 0) {
+            //     renderLogger.debug('drawDetections', `Rendered ${filtered.length} oriented bounding boxes`);
+            // }
+        }
+
+        // ============================================================================
+        // UI UPDATES
+        // ============================================================================
+        function updateStats() {
+            const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
+            detectionTotalEl.textContent = detections.length;
+            detectionCountEl.textContent = `${filtered.length} / ${detections.length} cards shown`;
+            captureBtn.textContent = `Capture (${filtered.length})`;
+            captureBtn.disabled = filtered.length === 0;
+            addToDatasetBtn.disabled = detections.length === 0;
+            
+            // uiLogger.debug('updateStats', `Stats updated: ${filtered.length}/${detections.length} shown`);
+        }
+
+        // ============================================================================
+        // AUTO MODE LOOP
+        // ============================================================================
+        function autoModeLoop() {
+            if (!autoMode || isProcessing) {
+                animationFrameId = requestAnimationFrame(autoModeLoop);
+                return;
+            }
+            
+            runInference().then(() => {
+                if (autoMode) {
+                    animationFrameId = requestAnimationFrame(autoModeLoop);
+                }
+            });
+        }
+
+        // ============================================================================
+        // TRAINING DATA EXPORT
+        // ============================================================================
+        
+        /**
+         * Convert OBB (center, width, height, angle) to 4 corner points
+         * Returns normalized coordinates in YOLO OBB format
+         */
+        function obbToCorners(detection) {
+            const { x, y, width, height, angle } = detection;
+            
+            // Half dimensions
+            const hw = width / 2;
+            const hh = height / 2;
+            
+            // Compute corners relative to center (before rotation)
+            // Top-left, top-right, bottom-right, bottom-left
+            const corners = [
+                [-hw, -hh],
+                [hw, -hh],
+                [hw, hh],
+                [-hw, hh]
+            ];
+            
+            // Rotate corners around center
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            
+            const rotatedCorners = corners.map(([cx, cy]) => {
+                const rx = cx * cos - cy * sin;
+                const ry = cx * sin + cy * cos;
+                return [x + rx, y + ry];
+            });
+            
+            return rotatedCorners;
+        }
+        
+        /**
+         * Generate YOLO OBB format label file content
+         */
+        function generateLabelFile(detections) {
+            const lines = detections.map(det => {
+                const corners = obbToCorners(det);
+                const classId = Math.round(det.classId);
+                
+                // Format: class_id x1 y1 x2 y2 x3 y3 x4 y4
+                const coords = corners.map(([x, y]) => 
+                    `${x.toFixed(6)} ${y.toFixed(6)}`
+                ).join(' ');
+                
+                return `${classId} ${coords}`;
+            }).join('\n');
+            
+            return lines + '\n';
+        }
+        
+        /**
+         * Trigger file download
+         */
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        /**
+         * Draw bounding boxes on a canvas for visualization
+         * Note: Canvas dimensions should already be set by caller
+         */
+        function drawOverlayOnCanvas(ctx, imageWidth, imageHeight, detectionsArray) {
+            detectionsArray.forEach((det) => {
+                // Convert normalized coordinates to canvas pixels
+                const centerX = det.x * imageWidth;
+                const centerY = det.y * imageHeight;
+                const w = det.width * imageWidth;
+                const h = det.height * imageHeight;
+                const angle = det.angle || 0;
+
+                ctx.save();
+                
+                // Move to center of box and rotate
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle);
+                
+                // Draw rotated rectangle (centered at origin after translate)
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(-w/2, -h/2, w, h);
+                
+                // Draw confidence label (unrotated for readability)
+                ctx.rotate(-angle);
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '20px monospace';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 4;
+                
+                // Show track ID if available, otherwise just confidence
+                let label;
+                if (det.trackId !== undefined) {
+                    label = `ID:${det.trackId} ${(det.confidence * 100).toFixed(0)}%`;
+                } else {
+                    label = `${(det.confidence * 100).toFixed(0)}%`;
+                }
+                
+                // Draw text with black outline for visibility
+                ctx.strokeText(label, -w/2, -h/2 - 8);
+                ctx.fillText(label, -w/2, -h/2 - 8);
+                
+                ctx.restore();
+            });
+        }
+
+        /**
+         * Download current frame as training data
+         */
+        async function downloadTrainingData() {
+            if (detections.length === 0) {
+                uiLogger.warning('downloadTrainingData', 'No detections to export');
+                alert('No detections available. Run inference first.');
+                return;
+            }
+            
+            // Filter detections by confidence threshold
+            const filteredDetections = detections.filter(d => d.confidence >= confidenceThreshold);
+            
+            if (filteredDetections.length === 0) {
+                uiLogger.warning('downloadTrainingData', 'No detections pass confidence threshold');
+                alert(`No detections pass the ${(confidenceThreshold * 100).toFixed(0)}% confidence threshold. Lower the threshold or run inference again.`);
+                return;
+            }
+            
+            try {
+                uiLogger.info('downloadTrainingData', `Exporting ${filteredDetections.length} detections as training data (threshold: ${confidenceThreshold})`);
+                
+                // Generate timestamp-based filename
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_').slice(0, -5);
+                const baseFilename = `training_${timestamp}`;
+                
+                // Capture current frame from video
+                hiddenCanvas.width = video.videoWidth;
+                hiddenCanvas.height = video.videoHeight;
+                hiddenCtx.drawImage(video, 0, 0);
+                
+                // Download original image as JPG
+                hiddenCanvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${baseFilename}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    uiLogger.info('downloadTrainingData', `Downloaded image: ${baseFilename}.jpg`);
+                }, 'image/jpeg', 0.95);
+                
+                // Download overlay visualization if checkbox is checked
+                if (includeOverlayCheckbox.checked) {
+                    uiLogger.info('downloadTrainingData', 'Creating overlay visualization');
+                    
+                    // Create a temporary canvas for the overlay
+                    const overlayVisCanvas = document.createElement('canvas');
+                    const overlayVisCtx = overlayVisCanvas.getContext('2d');
+                    
+                    // Set canvas size FIRST (this clears the canvas)
+                    overlayVisCanvas.width = video.videoWidth;
+                    overlayVisCanvas.height = video.videoHeight;
+                    
+                    // Draw the captured frame from hiddenCanvas
+                    overlayVisCtx.drawImage(hiddenCanvas, 0, 0);
+                    
+                    // Draw filtered bounding boxes on top (don't resize canvas again!)
+                    drawOverlayOnCanvas(overlayVisCtx, video.videoWidth, video.videoHeight, filteredDetections);
+                    
+                    // Download overlay image
+                    overlayVisCanvas.toBlob((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${baseFilename}_overlay.jpg`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        uiLogger.info('downloadTrainingData', `Downloaded overlay: ${baseFilename}_overlay.jpg`);
+                    }, 'image/jpeg', 0.95);
+                }
+                
+                // Generate and download label file (filtered detections only)
+                const labelContent = generateLabelFile(filteredDetections);
+                downloadFile(labelContent, `${baseFilename}.txt`, 'text/plain');
+                
+                uiLogger.info('downloadTrainingData', `Downloaded labels: ${baseFilename}.txt`);
+                uiLogger.debug('downloadTrainingData', 'Label content', { labelContent });
+                
+                const filesDownloaded = includeOverlayCheckbox.checked ? 3 : 2;
+                statusText.textContent = `Training data downloaded: ${filesDownloaded} files, ${filteredDetections.length} detections`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 3000);
+                
+            } catch (error) {
+                uiLogger.error('downloadTrainingData', `Failed to download training data: ${error.message}`, error);
+                alert(`Error downloading training data: ${error.message}`);
+            }
+        }
+
+        // ============================================================================
+        // EVENT HANDLERS
+        // ============================================================================
+        runOnceBtn.addEventListener('click', () => {
+            uiLogger.info('runOnceBtn.click', 'User clicked Run Once');
+            runInference();
+        });
+
+        autoModeBtn.addEventListener('click', () => {
+            autoMode = !autoMode;
+            if (autoMode) {
+                uiLogger.info('autoModeBtn.click', 'Starting auto mode');
+                autoModeBtn.textContent = 'Stop Auto';
+                autoModeBtn.classList.add('stop');
+                runOnceBtn.disabled = true;
+                autoModeLoop();
+            } else {
+                uiLogger.info('autoModeBtn.click', 'Stopping auto mode');
+                autoModeBtn.textContent = 'Start Auto';
+                autoModeBtn.classList.remove('stop');
+                runOnceBtn.disabled = false;
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+            }
+        });
+
+        captureBtn.addEventListener('click', () => {
+            const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
+            uiLogger.info('captureBtn.click', `User clicked capture with ${filtered.length} detections`);
+            alert(`Would capture ${filtered.length} cards (not implemented in test page)`);
+        });
+
+        addToDatasetBtn.addEventListener('click', () => {
+            uiLogger.info('addToDatasetBtn.click', 'User clicked Add to Dataset');
+            addToDataset();
+        });
+
+        toggleDatasetViewerBtn.addEventListener('click', () => {
+            uiLogger.info('toggleDatasetViewerBtn.click', 'User toggled Dataset Viewer');
+            toggleDatasetViewer();
+        });
+
+        thresholdInput.addEventListener('input', (e) => {
+            const oldThreshold = confidenceThreshold;
+            confidenceThreshold = parseFloat(e.target.value);
+            uiLogger.debug('thresholdInput.input', `Threshold changed: ${oldThreshold.toFixed(2)} -> ${confidenceThreshold.toFixed(2)}`);
+            
+            thresholdValueEl.textContent = `${(confidenceThreshold * 100).toFixed(0)}%`;
+            drawDetections();
+            updateStats();
+        });
+
+        enableTrackingCheckbox.addEventListener('change', (e) => {
+            trackingEnabled = e.target.checked;
+            
+            if (trackingEnabled) {
+                uiLogger.info('enableTrackingCheckbox.change', `Object tracking enabled with ${trackerType}`);
+                
+                // Initialize tracker with current parameters
+                initializeTracker();
+                
+                // Show tracking parameters panel for current tracker
+                showTrackerParams(trackerType);
+                
+                statusText.textContent = `Object tracking enabled (${trackerType}) - tracks will stabilize over time`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            } else {
+                uiLogger.info('enableTrackingCheckbox.change', 'Object tracking disabled - showing raw detections');
+                tracker = null;
+                
+                // Hide all tracking parameters panels
+                showTrackerParams(null);
+                
+                statusText.textContent = 'Object tracking disabled - showing raw detections';
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            }
+            
+            // Redraw current detections with new tracking state
+            drawDetections();
+        });
+
+        // Tracker type selection
+        trackerTypeSelect.addEventListener('change', (e) => {
+            const oldType = trackerType;
+            trackerType = e.target.value;
+            uiLogger.info('trackerTypeSelect.change', `Tracker type changed: ${oldType} -> ${trackerType}`);
+            
+            if (trackingEnabled) {
+                // Reinitialize tracker with new type
+                initializeTracker();
+                showTrackerParams(trackerType);
+                
+                statusText.textContent = `Switched to ${trackerType} tracker`;
+                setTimeout(() => {
+                    statusText.textContent = 'Model ready - Click Start Auto or Run Once';
+                }, 2000);
+            } else {
+                // Just hide/show params without initializing
+                showTrackerParams(null);
+            }
+        });
+
+        // Model panel toggle
+        modelPanelToggle.addEventListener('click', () => {
+            modelPanelContent.classList.toggle('collapsed');
+            modelPanelToggle.textContent = modelPanelContent.classList.contains('collapsed') ? 'Expand' : 'Collapse';
+            uiLogger.info('modelPanelToggle.click', `Model panel ${modelPanelContent.classList.contains('collapsed') ? 'collapsed' : 'expanded'}`);
+        });
+        
+        // Search input
+        modelSearchInput.addEventListener('input', (e) => {
+            modelFilters.search = e.target.value;
+            applyFilters();
+        });
+        
+        // Type filter
+        modelTypeFilter.addEventListener('change', (e) => {
+            modelFilters.type = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelTypeFilter.change', `Type filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Architecture filter
+        modelArchFilter.addEventListener('change', (e) => {
+            modelFilters.architecture = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelArchFilter.change', `Architecture filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Resolution filter
+        modelResolutionFilter.addEventListener('change', (e) => {
+            modelFilters.resolution = e.target.value;
+            applyFilters();
+            uiLogger.debug('modelResolutionFilter.change', `Resolution filter: ${e.target.value || 'all'}`);
+        });
+        
+        // Reset filters button
+        filterResetBtn.addEventListener('click', () => {
+            resetFilters();
+        });
+
+        // ============================================================================
+        // BYTETRACK PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('bt_trackHighThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.trackHighThresh = parseFloat(e.target.value);
+            document.getElementById('bt_trackHighThreshValue').textContent = `${(trackingParams.bytetrack.trackHighThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_trackLowThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.trackLowThresh = parseFloat(e.target.value);
+            document.getElementById('bt_trackLowThreshValue').textContent = `${(trackingParams.bytetrack.trackLowThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_newTrackThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.newTrackThresh = parseFloat(e.target.value);
+            document.getElementById('bt_newTrackThreshValue').textContent = `${(trackingParams.bytetrack.newTrackThresh * 100).toFixed(0)}%`;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_matchThresh').addEventListener('input', (e) => {
+            trackingParams.bytetrack.matchThresh = parseFloat(e.target.value);
+            document.getElementById('bt_matchThreshValue').textContent = trackingParams.bytetrack.matchThresh.toFixed(2);
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_maxAge').addEventListener('input', (e) => {
+            trackingParams.bytetrack.maxAge = parseInt(e.target.value);
+            document.getElementById('bt_maxAgeValue').textContent = trackingParams.bytetrack.maxAge;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        document.getElementById('bt_minHits').addEventListener('input', (e) => {
+            trackingParams.bytetrack.minHits = parseInt(e.target.value);
+            document.getElementById('bt_minHitsValue').textContent = trackingParams.bytetrack.minHits;
+            if (trackingEnabled && trackerType === 'bytetrack') initializeTracker();
+        });
+
+        // ============================================================================
+        // SORT PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('sort_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.sort.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('sort_iouThresholdValue').textContent = trackingParams.sort.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        document.getElementById('sort_maxAge').addEventListener('input', (e) => {
+            trackingParams.sort.maxAge = parseInt(e.target.value);
+            document.getElementById('sort_maxAgeValue').textContent = trackingParams.sort.maxAge;
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        document.getElementById('sort_minHits').addEventListener('input', (e) => {
+            trackingParams.sort.minHits = parseInt(e.target.value);
+            document.getElementById('sort_minHitsValue').textContent = trackingParams.sort.minHits;
+            if (trackingEnabled && trackerType === 'sort') initializeTracker();
+        });
+
+        // ============================================================================
+        // DEEPSORT PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('ds_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.deepsort.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('ds_iouThresholdValue').textContent = trackingParams.deepsort.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_maxCosineDistance').addEventListener('input', (e) => {
+            trackingParams.deepsort.maxCosineDistance = parseFloat(e.target.value);
+            document.getElementById('ds_maxCosineDistanceValue').textContent = trackingParams.deepsort.maxCosineDistance.toFixed(2);
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_maxAge').addEventListener('input', (e) => {
+            trackingParams.deepsort.maxAge = parseInt(e.target.value);
+            document.getElementById('ds_maxAgeValue').textContent = trackingParams.deepsort.maxAge;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_minHits').addEventListener('input', (e) => {
+            trackingParams.deepsort.minHits = parseInt(e.target.value);
+            document.getElementById('ds_minHitsValue').textContent = trackingParams.deepsort.minHits;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        document.getElementById('ds_nnBudget').addEventListener('input', (e) => {
+            trackingParams.deepsort.nnBudget = parseInt(e.target.value);
+            document.getElementById('ds_nnBudgetValue').textContent = trackingParams.deepsort.nnBudget;
+            if (trackingEnabled && trackerType === 'deepsort') initializeTracker();
+        });
+
+        // ============================================================================
+        // IOU TRACKER PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('iou_iouThreshold').addEventListener('input', (e) => {
+            trackingParams.iou.iouThreshold = parseFloat(e.target.value);
+            document.getElementById('iou_iouThresholdValue').textContent = trackingParams.iou.iouThreshold.toFixed(2);
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        document.getElementById('iou_maxAge').addEventListener('input', (e) => {
+            trackingParams.iou.maxAge = parseInt(e.target.value);
+            document.getElementById('iou_maxAgeValue').textContent = trackingParams.iou.maxAge;
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        document.getElementById('iou_minHits').addEventListener('input', (e) => {
+            trackingParams.iou.minHits = parseInt(e.target.value);
+            document.getElementById('iou_minHitsValue').textContent = trackingParams.iou.minHits;
+            if (trackingEnabled && trackerType === 'iou') initializeTracker();
+        });
+
+        // ============================================================================
+        // CENTROID TRACKER PARAMETER SLIDERS
+        // ============================================================================
+        document.getElementById('ct_maxDistance').addEventListener('input', (e) => {
+            trackingParams.centroid.maxDistance = parseFloat(e.target.value);
+            document.getElementById('ct_maxDistanceValue').textContent = trackingParams.centroid.maxDistance.toFixed(2);
+            if (trackingEnabled && trackerType === 'centroid') initializeTracker();
+        });
+
+        document.getElementById('ct_maxDisappeared').addEventListener('input', (e) => {
+            trackingParams.centroid.maxDisappeared = parseInt(e.target.value);
+            document.getElementById('ct_maxDisappearedValue').textContent = trackingParams.centroid.maxDisappeared;
+            if (trackingEnabled && trackerType === 'centroid') initializeTracker();
+        });
+
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+        mainLogger.info('init', 'Application starting');
+        mainLogger.debug('init', 'User agent', { userAgent: navigator.userAgent });
+        mainLogger.debug('init', 'WebGPU support', { 
+            hasGPU: 'gpu' in navigator,
+            hasWebGPU: typeof navigator.gpu !== 'undefined'
+        });
+        
+        // Handle window resize to keep canvas aligned
+        window.addEventListener('resize', () => {
+            if (video.videoWidth > 0) {
+                updateCanvasSize();
+                drawDetections();
+            }
+        });
+        
+        // Initialize application
+        async function initializeApp() {
+            await initCamera();
+            await loadModelRegistry();
+            
+            if (currentModel) {
+                await loadModel(currentModel);
+            } else {
+                mainLogger.error('init', 'No models available to load');
+                statusText.textContent = 'Error: No models available';
+            }
+        }
+        
+        initializeApp();
+    </script>
+</body>
 </html>
+
