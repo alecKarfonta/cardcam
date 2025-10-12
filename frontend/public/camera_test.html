@@ -152,6 +152,73 @@
     </div>
 
     <script>
+        // ============================================================================
+        // LOGGING SYSTEM
+        // ============================================================================
+        const LogLevel = {
+            DEBUG: 0,
+            INFO: 1,
+            WARNING: 2,
+            ERROR: 3
+        };
+
+        class Logger {
+            constructor(moduleName, minLevel = LogLevel.DEBUG) {
+                this.moduleName = moduleName;
+                this.minLevel = minLevel;
+            }
+
+            _log(level, functionName, message, data = null) {
+                if (level < this.minLevel) return;
+
+                const prefix = `[${this.moduleName}.${functionName}]`;
+                const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+                const fullMessage = `${timestamp} ${prefix} ${message}`;
+
+                switch (level) {
+                    case LogLevel.DEBUG:
+                        console.log(`%c${fullMessage}`, 'color: #888', data || '');
+                        break;
+                    case LogLevel.INFO:
+                        console.log(`%c${fullMessage}`, 'color: #00aaff', data || '');
+                        break;
+                    case LogLevel.WARNING:
+                        console.warn(`${fullMessage}`, data || '');
+                        break;
+                    case LogLevel.ERROR:
+                        console.error(`${fullMessage}`, data || '');
+                        break;
+                }
+            }
+
+            debug(functionName, message, data = null) {
+                this._log(LogLevel.DEBUG, functionName, message, data);
+            }
+
+            info(functionName, message, data = null) {
+                this._log(LogLevel.INFO, functionName, message, data);
+            }
+
+            warning(functionName, message, data = null) {
+                this._log(LogLevel.WARNING, functionName, message, data);
+            }
+
+            error(functionName, message, data = null) {
+                this._log(LogLevel.ERROR, functionName, message, data);
+            }
+        }
+
+        // Create loggers for different modules
+        const cameraLogger = new Logger('Camera');
+        const modelLogger = new Logger('Model');
+        const inferenceLogger = new Logger('Inference');
+        const renderLogger = new Logger('Render');
+        const uiLogger = new Logger('UI');
+        const mainLogger = new Logger('Main');
+
+        // ============================================================================
+        // APPLICATION STATE
+        // ============================================================================
         let session = null;
         let autoMode = false;
         let isProcessing = false;
@@ -177,10 +244,19 @@
         const captureBtn = document.getElementById('capture');
         const thresholdInput = document.getElementById('threshold');
 
-        // Initialize camera
+        // ============================================================================
+        // CAMERA INITIALIZATION
+        // ============================================================================
         async function initCamera() {
+            cameraLogger.info('initCamera', 'Starting camera initialization');
             try {
                 statusText.textContent = 'Requesting camera access...';
+                cameraLogger.debug('initCamera', 'Requesting camera permissions with constraints', {
+                    facingMode: 'environment',
+                    width: 1920,
+                    height: 1080
+                });
+                
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'environment',
@@ -188,29 +264,48 @@
                         height: { ideal: 1080 }
                     }
                 });
+                
+                cameraLogger.info('initCamera', 'Camera access granted');
                 video.srcObject = stream;
                 
                 video.onloadedmetadata = () => {
+                    const videoInfo = {
+                        clientWidth: video.clientWidth,
+                        clientHeight: video.clientHeight,
+                        videoWidth: video.videoWidth,
+                        videoHeight: video.videoHeight
+                    };
+                    cameraLogger.info('initCamera', 'Video metadata loaded', videoInfo);
+                    
                     overlayCanvas.width = video.clientWidth;
                     overlayCanvas.height = video.clientHeight;
                     statusText.textContent = 'Camera ready';
+                    
+                    cameraLogger.info('initCamera', 'Camera initialization complete');
                 };
             } catch (error) {
+                cameraLogger.error('initCamera', `Failed to initialize camera: ${error.message}`, error);
                 statusText.textContent = `Camera error: ${error.message}`;
-                console.error('Camera error:', error);
             }
         }
 
-        // Load model
+        // ============================================================================
+        // MODEL LOADING
+        // ============================================================================
         async function loadModel() {
+            modelLogger.info('loadModel', 'Starting model loading');
+            
             if (!window.ort) {
+                modelLogger.error('loadModel', 'ONNX Runtime not available in window object');
                 statusText.textContent = 'Error: ONNX Runtime not loaded';
                 return;
             }
 
+            modelLogger.debug('loadModel', `ONNX Runtime version: ${ort.env.versions.common}`);
+
             try {
                 statusText.textContent = 'Loading model...';
-                console.log('Loading model with WebGPU ONLY (no fallback)...');
+                modelLogger.info('loadModel', 'Creating inference session with WebGPU (no fallback)');
 
                 const startTime = performance.now();
                 session = await ort.InferenceSession.create('/models/trading_card_detector.onnx', {
@@ -219,22 +314,41 @@
                 });
 
                 const loadTime = performance.now() - startTime;
-                console.log(`Model loaded in ${loadTime.toFixed(2)}ms`);
+                modelLogger.info('loadModel', `Model loaded successfully in ${loadTime.toFixed(2)}ms`);
+                
+                // Log model details
+                const modelInfo = {
+                    inputNames: session.inputNames,
+                    outputNames: session.outputNames,
+                    inputTypes: session.inputNames.map(name => {
+                        const input = session._model?.graph?.input?.find(i => i.name === name);
+                        return input?.type?.tensorType?.elemType || 'unknown';
+                    })
+                };
+                modelLogger.debug('loadModel', 'Model metadata', modelInfo);
                 
                 statusText.textContent = 'Model ready - Click Start Auto or Run Once';
                 providerEl.textContent = 'WebGPU';
                 
                 runOnceBtn.disabled = false;
                 autoModeBtn.disabled = false;
+                
+                modelLogger.info('loadModel', 'Model initialization complete');
             } catch (error) {
+                modelLogger.error('loadModel', `Failed to load model: ${error.message}`, {
+                    error: error,
+                    stack: error.stack
+                });
                 statusText.textContent = `Model load error: ${error.message}`;
-                console.error('Model load error:', error);
-                console.error('Full error stack:', error.stack);
             }
         }
 
-        // Preprocess image
+        // ============================================================================
+        // IMAGE PREPROCESSING
+        // ============================================================================
         function preprocessImage(imageData) {
+            inferenceLogger.debug('preprocessImage', `Starting preprocessing of ${imageData.width}x${imageData.height} image`);
+            
             const { width, height } = imageData;
             const targetSize = 1088;
 
@@ -244,26 +358,39 @@
             const padX = Math.floor((targetSize - newW) / 2);
             const padY = Math.floor((targetSize - newH) / 2);
 
+            inferenceLogger.debug('preprocessImage', 'Scaling parameters', {
+                originalSize: `${width}x${height}`,
+                targetSize: targetSize,
+                scale: scale.toFixed(3),
+                scaledSize: `${newW}x${newH}`,
+                padding: `${padX}x${padY}`
+            });
+
+            // Create source canvas from ImageData
             const srcCanvas = document.createElement('canvas');
             const srcCtx = srcCanvas.getContext('2d');
             srcCanvas.width = width;
             srcCanvas.height = height;
             srcCtx.putImageData(imageData, 0, 0);
 
+            // Create target canvas with padding
             const dstCanvas = document.createElement('canvas');
             const dstCtx = dstCanvas.getContext('2d');
             dstCanvas.width = targetSize;
             dstCanvas.height = targetSize;
 
+            // Fill with gray padding
             dstCtx.fillStyle = '#808080';
             dstCtx.fillRect(0, 0, targetSize, targetSize);
             dstCtx.drawImage(srcCanvas, 0, 0, width, height, padX, padY, newW, newH);
 
+            // Convert to tensor
             const resized = dstCtx.getImageData(0, 0, targetSize, targetSize);
             const pixels = resized.data;
             const tensorData = new Float32Array(1 * 3 * targetSize * targetSize);
             const pixelCount = targetSize * targetSize;
 
+            inferenceLogger.debug('preprocessImage', 'Converting to tensor (CHW format)');
             for (let i = 0; i < pixelCount; i++) {
                 const p = i * 4;
                 tensorData[i] = pixels[p] / 255.0;
@@ -271,91 +398,213 @@
                 tensorData[i + 2 * pixelCount] = pixels[p + 2] / 255.0;
             }
 
-            return new ort.Tensor('float32', tensorData, [1, 3, targetSize, targetSize]);
+            const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetSize, targetSize]);
+            inferenceLogger.debug('preprocessImage', `Tensor created: ${tensor.dims.join('x')}, type: ${tensor.type}`);
+            
+            return tensor;
         }
 
-        // Run inference
+        // ============================================================================
+        // INFERENCE
+        // ============================================================================
         async function runInference() {
-            if (!session || isProcessing) return;
+            if (!session) {
+                inferenceLogger.warning('runInference', 'No session available, skipping inference');
+                return;
+            }
+            
+            if (isProcessing) {
+                inferenceLogger.debug('runInference', 'Already processing, skipping this frame');
+                return;
+            }
+
+            inferenceLogger.info('runInference', 'Starting inference');
 
             try {
                 isProcessing = true;
 
+                // Capture video frame
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
                 hiddenCtx.drawImage(video, 0, 0);
+                inferenceLogger.debug('runInference', `Captured frame: ${video.videoWidth}x${video.videoHeight}`);
 
                 const imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
                 const inputTensor = preprocessImage(imageData);
 
+                // Run model inference
+                inferenceLogger.debug('runInference', 'Running model with input', {
+                    inputName: session.inputNames[0],
+                    inputShape: inputTensor.dims.join('x')
+                });
+                
                 const inferenceStart = performance.now();
                 const results = await session.run({
                     [session.inputNames[0]]: inputTensor
                 });
                 const inferenceMs = performance.now() - inferenceStart;
 
+                inferenceLogger.info('runInference', `Inference completed in ${inferenceMs.toFixed(1)}ms`);
                 inferenceTimeEl.textContent = `${inferenceMs.toFixed(0)}ms`;
                 providerEl.textContent = 'WebGPU';
 
-                const boxes = results[session.outputNames[0]].data;
-                const scores = results[session.outputNames[1]].data;
+                // Validate outputs
+                inferenceLogger.debug('runInference', 'Model outputs', {
+                    expectedOutputs: session.outputNames,
+                    actualOutputs: Object.keys(results),
+                    outputCount: session.outputNames.length
+                });
 
-                detections = [];
-                for (let i = 0; i < scores.length; i++) {
-                    if (scores[i] >= 0.3) {
-                        const x = boxes[i * 4];
-                        const y = boxes[i * 4 + 1];
-                        const w = boxes[i * 4 + 2] - x;
-                        const h = boxes[i * 4 + 3] - y;
-                        detections.push({ x, y, width: w, height: h, confidence: scores[i] });
+                // Log detailed output information
+                session.outputNames.forEach((name, idx) => {
+                    if (results[name]) {
+                        inferenceLogger.debug('runInference', `Output ${idx}: ${name}`, {
+                            shape: results[name].dims.join('x'),
+                            type: results[name].type,
+                            dataLength: results[name].data.length,
+                            firstFewValues: Array.from(results[name].data.slice(0, 10))
+                        });
                     }
+                });
+
+                // Parse output based on structure
+                const output = results[session.outputNames[0]];
+                const outputData = output.data;
+                const outputShape = output.dims;
+                
+                inferenceLogger.debug('runInference', 'Parsing output', {
+                    shape: outputShape.join('x'),
+                    format: 'OBB (Oriented Bounding Boxes)',
+                    valuesPerDetection: outputShape[2]
+                });
+
+                // Parse OBB format: [batch, num_detections, 7]
+                // Each detection: [x_center, y_center, width, height, confidence, class_id, angle]
+                const numDetections = outputShape[1];
+                const valuesPerDetection = outputShape[2];
+                
+                if (valuesPerDetection !== 7) {
+                    inferenceLogger.warning('runInference', `Expected 7 values per detection, got ${valuesPerDetection}`);
+                }
+
+                // Process detections
+                detections = [];
+                const minConfidence = 0.3;
+                
+                for (let i = 0; i < numDetections; i++) {
+                    const offset = i * valuesPerDetection;
+                    const x = outputData[offset];
+                    const y = outputData[offset + 1];
+                    const w = outputData[offset + 2];
+                    const h = outputData[offset + 3];
+                    const confidence = outputData[offset + 4];
+                    const classId = outputData[offset + 5];
+                    const angle = outputData[offset + 6];
+                    
+                    if (confidence >= minConfidence) {
+                        // Normalize coordinates (assuming they're in pixel space of 1088x1088)
+                        const normalizedX = x / 1088;
+                        const normalizedY = y / 1088;
+                        const normalizedW = w / 1088;
+                        const normalizedH = h / 1088;
+                        
+                        detections.push({
+                            x: normalizedX,
+                            y: normalizedY,
+                            width: normalizedW,
+                            height: normalizedH,
+                            confidence: confidence,
+                            classId: classId,
+                            angle: angle
+                        });
+                    }
+                }
+
+                inferenceLogger.info('runInference', `Found ${detections.length} detections (threshold: 0.3)`);
+                
+                if (detections.length > 0) {
+                    const confidences = detections.map(d => d.confidence.toFixed(3));
+                    inferenceLogger.debug('runInference', 'Detection confidences', { confidences });
                 }
 
                 drawDetections();
                 updateStats();
 
             } catch (error) {
-                console.error('Inference error:', error);
+                inferenceLogger.error('runInference', `Inference failed: ${error.message}`, {
+                    error: error,
+                    stack: error.stack
+                });
                 statusText.textContent = `Error: ${error.message}`;
             } finally {
                 isProcessing = false;
+                inferenceLogger.debug('runInference', 'Inference complete, released processing lock');
             }
         }
 
-        // Draw detections
+        // ============================================================================
+        // RENDERING
+        // ============================================================================
         function drawDetections() {
+            renderLogger.debug('drawDetections', `Drawing ${detections.length} detections`);
+            
             overlayCanvas.width = video.clientWidth;
             overlayCanvas.height = video.clientHeight;
             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
             const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
+            renderLogger.debug('drawDetections', `${filtered.length} detections pass threshold ${confidenceThreshold}`);
 
-            filtered.forEach(det => {
-                const x = det.x * overlayCanvas.width;
-                const y = det.y * overlayCanvas.height;
+            filtered.forEach((det, idx) => {
+                // Convert normalized coordinates to canvas pixels
+                const centerX = det.x * overlayCanvas.width;
+                const centerY = det.y * overlayCanvas.height;
                 const w = det.width * overlayCanvas.width;
                 const h = det.height * overlayCanvas.height;
+                const angle = det.angle || 0;
 
+                overlayCtx.save();
+                
+                // Move to center of box and rotate
+                overlayCtx.translate(centerX, centerY);
+                overlayCtx.rotate(angle);
+                
+                // Draw rotated rectangle (centered at origin after translate)
                 overlayCtx.strokeStyle = '#00ff00';
                 overlayCtx.lineWidth = 3;
-                overlayCtx.strokeRect(x, y, w, h);
-
+                overlayCtx.strokeRect(-w/2, -h/2, w, h);
+                
+                // Draw confidence label (unrotated for readability)
+                overlayCtx.rotate(-angle);
                 overlayCtx.fillStyle = '#00ff00';
                 overlayCtx.font = '16px monospace';
-                overlayCtx.fillText(`${(det.confidence * 100).toFixed(0)}%`, x, y - 5);
+                const label = `${(det.confidence * 100).toFixed(0)}%`;
+                overlayCtx.fillText(label, -w/2, -h/2 - 5);
+                
+                overlayCtx.restore();
             });
+            
+            if (filtered.length > 0) {
+                renderLogger.debug('drawDetections', `Rendered ${filtered.length} oriented bounding boxes`);
+            }
         }
 
-        // Update stats
+        // ============================================================================
+        // UI UPDATES
+        // ============================================================================
         function updateStats() {
             const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
             detectionTotalEl.textContent = detections.length;
             detectionCountEl.textContent = `${filtered.length} / ${detections.length} cards shown`;
             captureBtn.textContent = `Capture (${filtered.length})`;
             captureBtn.disabled = filtered.length === 0;
+            
+            uiLogger.debug('updateStats', `Stats updated: ${filtered.length}/${detections.length} shown`);
         }
 
-        // Auto mode loop
+        // ============================================================================
+        // AUTO MODE LOOP
+        // ============================================================================
         function autoModeLoop() {
             if (!autoMode || isProcessing) {
                 animationFrameId = requestAnimationFrame(autoModeLoop);
@@ -369,17 +618,24 @@
             });
         }
 
-        // Event listeners
-        runOnceBtn.addEventListener('click', runInference);
+        // ============================================================================
+        // EVENT HANDLERS
+        // ============================================================================
+        runOnceBtn.addEventListener('click', () => {
+            uiLogger.info('runOnceBtn.click', 'User clicked Run Once');
+            runInference();
+        });
 
         autoModeBtn.addEventListener('click', () => {
             autoMode = !autoMode;
             if (autoMode) {
+                uiLogger.info('autoModeBtn.click', 'Starting auto mode');
                 autoModeBtn.textContent = 'Stop Auto';
                 autoModeBtn.classList.add('stop');
                 runOnceBtn.disabled = true;
                 autoModeLoop();
             } else {
+                uiLogger.info('autoModeBtn.click', 'Stopping auto mode');
                 autoModeBtn.textContent = 'Start Auto';
                 autoModeBtn.classList.remove('stop');
                 runOnceBtn.disabled = false;
@@ -392,17 +648,30 @@
 
         captureBtn.addEventListener('click', () => {
             const filtered = detections.filter(d => d.confidence >= confidenceThreshold);
+            uiLogger.info('captureBtn.click', `User clicked capture with ${filtered.length} detections`);
             alert(`Would capture ${filtered.length} cards (not implemented in test page)`);
         });
 
         thresholdInput.addEventListener('input', (e) => {
+            const oldThreshold = confidenceThreshold;
             confidenceThreshold = parseFloat(e.target.value);
+            uiLogger.debug('thresholdInput.input', `Threshold changed: ${oldThreshold.toFixed(2)} -> ${confidenceThreshold.toFixed(2)}`);
+            
             thresholdValueEl.textContent = `${(confidenceThreshold * 100).toFixed(0)}%`;
             drawDetections();
             updateStats();
         });
 
-        // Initialize
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+        mainLogger.info('init', 'Application starting');
+        mainLogger.debug('init', 'User agent', { userAgent: navigator.userAgent });
+        mainLogger.debug('init', 'WebGPU support', { 
+            hasGPU: 'gpu' in navigator,
+            hasWebGPU: typeof navigator.gpu !== 'undefined'
+        });
+        
         initCamera();
         loadModel();
     </script>
