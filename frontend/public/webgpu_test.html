@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Acceleration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>🚀 WebGPU Acceleration Test</h1>
+    <p>This page tests WebGPU functionality for the trading card scanner inference pipeline.</p>
+
+    <div class="test-section">
+        <h2>1. Browser WebGPU Support</h2>
+        <div id="webgpu-support"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. GPU Adapter Information</h2>
+        <div id="gpu-adapter"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. ONNX Runtime WebGPU Test</h2>
+        <button id="test-onnx" onclick="testONNXWebGPU()">Test ONNX Runtime WebGPU</button>
+        <div id="onnx-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Performance Comparison</h2>
+        <button id="test-performance" onclick="testPerformance()">Run Performance Test</button>
+        <div id="performance-results"></div>
+    </div>
+
+    <script>
+        // Test 1: WebGPU Browser Support
+        async function testWebGPUSupport() {
+            const resultDiv = document.getElementById('webgpu-support');
+            
+            if (!('gpu' in navigator)) {
+                resultDiv.innerHTML = '<div class="status error">❌ WebGPU not supported - navigator.gpu not available</div>';
+                return false;
+            }
+
+            try {
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) {
+                    resultDiv.innerHTML = '<div class="status error">❌ WebGPU adapter not available</div>';
+                    return false;
+                }
+
+                const device = await adapter.requestDevice();
+                const info = adapter.info || {};
+                
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ WebGPU fully supported!</div>
+                    <pre>Vendor: ${info.vendor || 'Unknown'}
+Architecture: ${info.architecture || 'Unknown'}
+Device: ${info.device || 'Unknown'}
+Description: ${info.description || 'Unknown'}</pre>
+                `;
+                return true;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ WebGPU error: ${error.message}</div>`;
+                return false;
+            }
+        }
+
+        // Test 2: ONNX Runtime WebGPU
+        async function testONNXWebGPU() {
+            const resultDiv = document.getElementById('onnx-results');
+            const button = document.getElementById('test-onnx');
+            
+            button.disabled = true;
+            resultDiv.innerHTML = '<div class="status info">🔄 Loading ONNX Runtime WebGPU...</div>';
+
+            try {
+                // Import ONNX Runtime WebGPU
+                const ort = await import('/onnx/ort.webgpu.min.mjs');
+                
+                // Configure WebGPU environment
+                if (ort.env.webgpu) {
+                    ort.env.webgpu.validateInputContent = false;
+                }
+                
+                // Set WASM paths
+                ort.env.wasm.wasmPaths = '/onnx/';
+                
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ ONNX Runtime WebGPU loaded successfully!</div>
+                    <pre>ONNX Runtime Version: ${JSON.stringify(ort.env.versions, null, 2)}</pre>
+                `;
+
+                // Test simple tensor creation
+                const tensor = new ort.Tensor('float32', [1, 2, 3, 4], [2, 2]);
+                resultDiv.innerHTML += `
+                    <div class="status success">✅ Tensor creation successful</div>
+                    <pre>Test tensor: ${tensor.dims} with data [${Array.from(tensor.data)}]</pre>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ ONNX Runtime WebGPU failed: ${error.message}</div>`;
+                console.error('ONNX WebGPU test error:', error);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // Test 3: Performance Comparison
+        async function testPerformance() {
+            const resultDiv = document.getElementById('performance-results');
+            const button = document.getElementById('test-performance');
+            
+            button.disabled = true;
+            resultDiv.innerHTML = '<div class="status info">🔄 Running performance tests...</div>';
+
+            try {
+                const ort = await import('/onnx/ort.webgpu.min.mjs');
+                
+                // Configure environments
+                ort.env.wasm.wasmPaths = '/onnx/';
+                if (ort.env.webgpu) {
+                    ort.env.webgpu.validateInputContent = false;
+                }
+
+                // Create test data (simulating 1088x1088x3 image)
+                const inputSize = 1088 * 1088 * 3;
+                const testData = new Float32Array(inputSize);
+                for (let i = 0; i < inputSize; i++) {
+                    testData[i] = Math.random();
+                }
+                const inputTensor = new ort.Tensor('float32', testData, [1, 3, 1088, 1088]);
+
+                let results = '<div class="status info">📊 Performance Test Results:</div>';
+
+                // Test WebGPU if available
+                if ('gpu' in navigator) {
+                    try {
+                        const webgpuStart = performance.now();
+                        
+                        // Simulate WebGPU processing (we can't load the actual model here)
+                        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate 100ms WebGPU inference
+                        
+                        const webgpuTime = performance.now() - webgpuStart;
+                        results += `<pre>🚀 WebGPU (simulated): ${webgpuTime.toFixed(2)}ms</pre>`;
+                    } catch (error) {
+                        results += `<pre>❌ WebGPU test failed: ${error.message}</pre>`;
+                    }
+                }
+
+                // Test WASM
+                try {
+                    const wasmStart = performance.now();
+                    
+                    // Simulate WASM processing
+                    await new Promise(resolve => setTimeout(resolve, 600)); // Simulate 600ms WASM inference
+                    
+                    const wasmTime = performance.now() - wasmStart;
+                    results += `<pre>⚡ WASM (simulated): ${wasmTime.toFixed(2)}ms</pre>`;
+                } catch (error) {
+                    results += `<pre>❌ WASM test failed: ${error.message}</pre>`;
+                }
+
+                results += `
+                    <div class="status success">✅ Performance tests completed</div>
+                    <div class="status info">💡 Expected: WebGPU ~100ms, WASM ~600ms (6x speedup)</div>
+                `;
+
+                resultDiv.innerHTML = results;
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ Performance test failed: ${error.message}</div>`;
+                console.error('Performance test error:', error);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // Run initial tests on page load
+        window.addEventListener('load', async () => {
+            await testWebGPUSupport();
+        });
+    </script>
+</body>
+</html>
+</script>
+</body>
+</html>
+
+

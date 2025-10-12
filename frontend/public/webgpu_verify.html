@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Verification Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .test-section {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { color: #00ff00; }
+        .fail { color: #ff0000; }
+        .warn { color: #ffaa00; }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        #log {
+            height: 400px;
+            overflow-y: auto;
+            background: #000;
+            padding: 10px;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebGPU Verification Test</h1>
+    <p>This page verifies that all WebGPU fixes are working correctly.</p>
+
+    <div class="test-section">
+        <h2>1. Cross-Origin Isolation</h2>
+        <div id="cors-test">Checking...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. ONNX Runtime Loading</h2>
+        <div id="ort-test">Checking...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. WebGPU Support</h2>
+        <div id="webgpu-test">Checking...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Model Loading Test</h2>
+        <button onclick="testModelLoading()">Test Model Load</button>
+        <div id="model-test">Click button to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Inference Performance Test</h2>
+        <button onclick="testInference()">Run Inference Test</button>
+        <div id="inference-test">Click button to test</div>
+    </div>
+
+    <div id="log"></div>
+
+    <script src="onnx/ort.webgpu.min.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const className = type === 'pass' ? 'pass' : type === 'fail' ? 'fail' : type === 'warn' ? 'warn' : '';
+            log.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+
+        // Test 1: Cross-Origin Isolation
+        function testCrossOrigin() {
+            const corsDiv = document.getElementById('cors-test');
+            addLog('Testing cross-origin isolation...');
+            
+            const isolated = crossOriginIsolated;
+            const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+            
+            let html = '<pre>';
+            html += `crossOriginIsolated: ${isolated}\n`;
+            html += `SharedArrayBuffer: ${hasSharedArrayBuffer}\n`;
+            html += '</pre>';
+            
+            if (isolated && hasSharedArrayBuffer) {
+                html += '<span class="pass">✓ PASS: Cross-origin isolation is enabled!</span>';
+                addLog('✓ Cross-origin isolation: PASS', 'pass');
+            } else {
+                html += '<span class="fail">✗ FAIL: Cross-origin isolation NOT enabled!</span><br>';
+                html += '<span class="fail">Fix: Add headers to production nginx</span>';
+                addLog('✗ Cross-origin isolation: FAIL', 'fail');
+                addLog('  - Headers missing from production nginx', 'fail');
+            }
+            
+            corsDiv.innerHTML = html;
+        }
+
+        // Test 2: ONNX Runtime
+        function testONNXRuntime() {
+            const ortDiv = document.getElementById('ort-test');
+            addLog('Testing ONNX Runtime loading...');
+            
+            let html = '<pre>';
+            html += `window.ort exists: ${!!window.ort}\n`;
+            
+            if (window.ort) {
+                html += `Version: ${window.ort.env.versions?.web || 'unknown'}\n`;
+                html += `WebGPU env: ${!!window.ort.env.webgpu}\n`;
+                html += `WASM threads: ${window.ort.env.wasm.numThreads}\n`;
+                html += '</pre>';
+                html += '<span class="pass">✓ PASS: ONNX Runtime loaded from script tag!</span>';
+                addLog('✓ ONNX Runtime: PASS', 'pass');
+                addLog(`  - Version: ${window.ort.env.versions?.web}`, 'pass');
+            } else {
+                html += '</pre>';
+                html += '<span class="fail">✗ FAIL: ONNX Runtime NOT loaded!</span><br>';
+                html += '<span class="fail">Fix: Check script tag in index.html</span>';
+                addLog('✗ ONNX Runtime: FAIL', 'fail');
+                addLog('  - window.ort is undefined', 'fail');
+            }
+            
+            ortDiv.innerHTML = html;
+        }
+
+        // Test 3: WebGPU Support
+        async function testWebGPU() {
+            const webgpuDiv = document.getElementById('webgpu-test');
+            addLog('Testing WebGPU support...');
+            
+            let html = '<pre>';
+            html += `navigator.gpu: ${!!navigator.gpu}\n`;
+            
+            if (navigator.gpu) {
+                try {
+                    const adapter = await navigator.gpu.requestAdapter();
+                    if (adapter) {
+                        html += `Adapter: ${adapter.info?.device || 'available'}\n`;
+                        html += '</pre>';
+                        html += '<span class="pass">✓ PASS: WebGPU is supported!</span>';
+                        addLog('✓ WebGPU: PASS', 'pass');
+                        addLog(`  - Adapter: ${adapter.info?.device || 'available'}`, 'pass');
+                    } else {
+                        html += '</pre>';
+                        html += '<span class="warn">⚠ WARN: WebGPU adapter not available</span>';
+                        addLog('⚠ WebGPU: No adapter', 'warn');
+                    }
+                } catch (error) {
+                    html += `Error: ${error.message}\n</pre>`;
+                    html += '<span class="fail">✗ FAIL: WebGPU error</span>';
+                    addLog('✗ WebGPU: Error - ' + error.message, 'fail');
+                }
+            } else {
+                html += '</pre>';
+                html += '<span class="warn">⚠ WARN: WebGPU not available in this browser</span><br>';
+                html += '<span class="warn">Will fall back to multi-threaded WASM</span>';
+                addLog('⚠ WebGPU: Not available', 'warn');
+                addLog('  - Will use WASM fallback', 'warn');
+            }
+            
+            webgpuDiv.innerHTML = html;
+        }
+
+        // Test 4: Model Loading
+        let testSession = null;
+        async function testModelLoading() {
+            const modelDiv = document.getElementById('model-test');
+            modelDiv.innerHTML = '<span class="warn">Loading model...</span>';
+            addLog('Testing model loading...');
+            
+            if (!window.ort) {
+                modelDiv.innerHTML = '<span class="fail">✗ FAIL: ONNX Runtime not loaded</span>';
+                addLog('✗ Model load: FAIL - no ONNX Runtime', 'fail');
+                return;
+            }
+            
+            try {
+                const startTime = performance.now();
+                const providers = ['webgpu', 'wasm'];
+                
+                addLog(`Creating session with providers: ${providers.join(', ')}`);
+                
+                testSession = await window.ort.InferenceSession.create(
+                    'models/trading_card_detector.onnx',
+                    {
+                        executionProviders: providers,
+                        graphOptimizationLevel: 'all'
+                    }
+                );
+                
+                const loadTime = performance.now() - startTime;
+                
+                // Detect actual backend
+                const handler = testSession.handler;
+                const backend = handler?.backend?.backendType || handler?.backendType || 'unknown';
+                
+                let html = '<pre>';
+                html += `Load time: ${loadTime.toFixed(2)}ms\n`;
+                html += `Requested: [${providers.join(', ')}]\n`;
+                html += `Actual backend: ${backend}\n`;
+                html += `Input: ${testSession.inputNames[0]}\n`;
+                html += `Output: ${testSession.outputNames[0]}\n`;
+                html += '</pre>';
+                
+                if (backend === 'webgpu') {
+                    html += '<span class="pass">✓ PASS: Model loaded with WebGPU!</span>';
+                    addLog('✓ Model load: PASS - Using WebGPU', 'pass');
+                } else if (backend === 'wasm') {
+                    if (crossOriginIsolated) {
+                        html += '<span class="warn">⚠ WARN: Using multi-threaded WASM (WebGPU not available)</span>';
+                        addLog('⚠ Model load: Using multi-threaded WASM', 'warn');
+                    } else {
+                        html += '<span class="fail">✗ FAIL: Using single-threaded WASM (will block UI!)</span>';
+                        addLog('✗ Model load: Single-threaded WASM - will block!', 'fail');
+                    }
+                } else {
+                    html += `<span class="warn">⚠ WARN: Unknown backend: ${backend}</span>`;
+                    addLog(`⚠ Model load: Unknown backend: ${backend}`, 'warn');
+                }
+                
+                modelDiv.innerHTML = html;
+                addLog(`Model loaded in ${loadTime.toFixed(2)}ms`);
+                
+            } catch (error) {
+                modelDiv.innerHTML = `<span class="fail">✗ FAIL: ${error.message}</span>`;
+                addLog('✗ Model load: FAIL - ' + error.message, 'fail');
+                console.error(error);
+            }
+        }
+
+        // Test 5: Inference Performance
+        async function testInference() {
+            const inferenceDiv = document.getElementById('inference-test');
+            
+            if (!testSession) {
+                inferenceDiv.innerHTML = '<span class="fail">✗ Please load model first</span>';
+                addLog('✗ Inference: Model not loaded', 'fail');
+                return;
+            }
+            
+            inferenceDiv.innerHTML = '<span class="warn">Running inference...</span>';
+            addLog('Running inference test...');
+            
+            try {
+                // Create dummy input (1x3x1088x1088)
+                const inputData = new Float32Array(1 * 3 * 1088 * 1088);
+                for (let i = 0; i < inputData.length; i++) {
+                    inputData[i] = Math.random();
+                }
+                
+                const tensor = new window.ort.Tensor('float32', inputData, [1, 3, 1088, 1088]);
+                
+                addLog('Running inference...');
+                const startTime = performance.now();
+                
+                const results = await testSession.run({
+                    [testSession.inputNames[0]]: tensor
+                });
+                
+                const inferenceTime = performance.now() - startTime;
+                
+                let html = '<pre>';
+                html += `Inference time: ${inferenceTime.toFixed(2)}ms\n`;
+                html += `Output shape: ${results[testSession.outputNames[0]].dims.join('x')}\n`;
+                html += '</pre>';
+                
+                if (inferenceTime < 200) {
+                    html += '<span class="pass">✓ EXCELLENT: WebGPU acceleration working! (&lt;200ms)</span>';
+                    addLog(`✓ Inference: EXCELLENT - ${inferenceTime.toFixed(2)}ms (WebGPU)`, 'pass');
+                } else if (inferenceTime < 700) {
+                    html += '<span class="pass">✓ GOOD: Multi-threaded WASM working (&lt;700ms)</span>';
+                    addLog(`✓ Inference: GOOD - ${inferenceTime.toFixed(2)}ms (multi-threaded WASM)`, 'pass');
+                } else if (inferenceTime < 1200) {
+                    html += '<span class="warn">⚠ ACCEPTABLE: Inference completed but slower than expected</span>';
+                    addLog(`⚠ Inference: SLOW - ${inferenceTime.toFixed(2)}ms`, 'warn');
+                } else {
+                    html += '<span class="fail">✗ SLOW: Likely single-threaded WASM blocking (&gt;1200ms)</span>';
+                    addLog(`✗ Inference: TOO SLOW - ${inferenceTime.toFixed(2)}ms (check cross-origin headers)`, 'fail');
+                }
+                
+                inferenceDiv.innerHTML = html;
+                addLog(`Inference completed in ${inferenceTime.toFixed(2)}ms`);
+                
+            } catch (error) {
+                inferenceDiv.innerHTML = `<span class="fail">✗ FAIL: ${error.message}</span>`;
+                addLog('✗ Inference: FAIL - ' + error.message, 'fail');
+                console.error(error);
+            }
+        }
+
+        // Run tests on load
+        window.addEventListener('DOMContentLoaded', () => {
+            addLog('=== WebGPU Verification Started ===');
+            addLog('');
+            
+            testCrossOrigin();
+            testONNXRuntime();
+            testWebGPU();
+            
+            addLog('');
+            addLog('=== Basic tests complete ===');
+            addLog('Click buttons above to test model loading and inference');
+        });
+    </script>
+</body>
+</html>
+

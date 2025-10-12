@@ -94,11 +94,11 @@ function getOptimalExecutionProviders(): string[] {
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   modelPath: `${process.env.PUBLIC_URL || ''}/models/trading_card_detector.onnx`,
-  inputShape: [1, 3, 1088, 1088], // REDUCED from 1088x1088 - should be 3-4x faster
-  outputShape: [1, 300, 7], // NMS-enabled ONNX format: [cx,cy,w,h,conf,class,angle] per detection
-  executionProviders: getOptimalExecutionProviders(), // Dynamic provider selection for better performance
-  confidenceThreshold: 0.25, // Lower threshold since NMS is already applied
-  nmsThreshold: 0.45, // Not used since NMS is built into ONNX model
+  inputShape: [1, 3, 1088, 1088], 
+  outputShape: [1, 300, 7], 
+  executionProviders: getOptimalExecutionProviders(), 
+  confidenceThreshold: 0.25, 
+  nmsThreshold: 0.45, 
 };
 
 export const useInference = () => {
